@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
+import { supabase } from '@/lib/supabaseClient'
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true)
@@ -17,13 +18,45 @@ export default function AuthPage() {
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Here you would typically handle the authentication logic
     if (isLogin) {
-      console.log("Logging in", { email, password })
+      // Login with Supabase Auth
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+      if (error) {
+        alert(error.message)
+      } else {
+        // Optionally redirect or show success
+      }
     } else {
-      console.log("Signing up", { name, email, phone, password })
+      // Signup with Supabase Auth
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { name, phone }
+        }
+      })
+      if (error) {
+        alert(error.message)
+        return
+      }
+      // Insert into public.users table
+      if (data.user) {
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert([
+            { id: data.user.id, email, name, phone }
+          ])
+        if (insertError) {
+          alert('Signup succeeded but failed to save profile: ' + insertError.message)
+        } else {
+          // Optionally redirect or show success
+        }
+      }
     }
   }
 
