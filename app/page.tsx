@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Settings, UserIcon, CalendarDays, Clock, Target, StickyNote, Utensils, Dumbbell, DollarSign, Repeat, Users } from "lucide-react"
+import { Settings, UserIcon, CalendarDays, Clock, Target, StickyNote, Utensils, Dumbbell, DollarSign, Repeat, Users, ArrowRight } from "lucide-react"
 
 export default function Home() {
   const isLoggedIn = false // This should be replaced with actual authentication logic
@@ -79,6 +79,31 @@ export default function Home() {
               <Users className="h-7 w-7 text-blue-400 mb-2" />
               <span className="font-bold">Peer Sync</span>
               <span className="text-sm text-gray-400 text-center">Collaborate and sync with friends or peers.</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Call to Action Section */}
+        <div className="w-full max-w-4xl mb-10">
+          <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 rounded-xl p-8 shadow-2xl border border-gray-700">
+            <div className="text-center">
+              <h3 className="text-3xl font-bold mb-4 text-white">
+                Ready to Transform Your Productivity?
+              </h3>
+              <p className="text-lg text-gray-200 mb-6 max-w-2xl mx-auto">
+                Join thousands of users who are already organizing their life with Task Manager by JOR. 
+                Start your journey to better productivity today - it's completely free!
+              </p>
+              <Link 
+                href="/auth" 
+                className="inline-flex items-center px-8 py-4 bg-white text-gray-900 font-semibold rounded-lg hover:bg-gray-100 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+              >
+                Get Started Now
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Link>
+              <p className="text-sm text-gray-300 mt-4">
+                No credit card required • Free forever • Start in seconds
+              </p>
             </div>
           </div>
         </div>
