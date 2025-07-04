@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { supabase } from '@/lib/supabaseClient'
+import { useRouter } from 'next/navigation'
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true)
@@ -17,6 +18,7 @@ export default function AuthPage() {
   const [password, setPassword] = useState("")
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -29,7 +31,7 @@ export default function AuthPage() {
       if (error) {
         alert(error.message)
       } else {
-        // Optionally redirect or show success
+        router.push('/dashboard');
       }
     } else {
       // Signup with Supabase Auth
@@ -44,19 +46,8 @@ export default function AuthPage() {
         alert(error.message)
         return
       }
-      // Insert into public.users table
-      if (data.user) {
-        const { error: insertError } = await supabase
-          .from('users')
-          .insert([
-            { id: data.user.id, email, name, phone }
-          ])
-        if (insertError) {
-          alert('Signup succeeded but failed to save profile: ' + insertError.message)
-        } else {
-          // Optionally redirect or show success
-        }
-      }
+      // No need to insert into public.users table here!
+      router.push('/dashboard');
     }
   }
 

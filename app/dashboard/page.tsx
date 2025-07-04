@@ -32,6 +32,8 @@ import {
 import { format, addDays, startOfWeek, parseISO } from "date-fns"
 import Link from "next/link"
 import type { Appointment } from "./appointments/page"
+import { supabase } from '@/lib/supabaseClient'
+import { useRouter } from 'next/navigation'
 
 type Task = {
   id: number
@@ -115,6 +117,8 @@ export default function WeeklyTaskManager() {
   const [fitnessActivities, setFitnessActivities] = useState<FitnessActivity[]>([])
   // Add this new state variable
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [userName, setUserName] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     const storedTodos = localStorage.getItem("todos")
@@ -179,6 +183,24 @@ export default function WeeklyTaskManager() {
     localStorage.setItem("appointments", JSON.stringify(appointments))
   }, [appointments])
 
+  useEffect(() => {
+    // Fetch the current user's name from the public users table
+    const fetchUserName = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data, error } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', user.id)
+          .single();
+        if (!error && data) {
+          setUserName(data.name);
+        }
+      }
+    };
+    fetchUserName();
+  }, []);
+
   const addTask = useCallback(
     (day: string) => {
       const taskName = `New Task ${tasks[day]?.length + 1 || 1}`
@@ -234,8 +256,17 @@ export default function WeeklyTaskManager() {
 
   const focusedDay = days[focusedDayIndex] || ""
 
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push('/');
+  };
+
   return (
     <div className="container mx-auto p-4 pb-24">
+      {/* Display the user's name at the top */}
+      {userName && (
+        <div className="text-lg font-semibold text-white mb-2">Welcome, {userName}!</div>
+      )}
       <Card className="bg-[#141415] border border-gray-700 mb-4 mt-2 p-2 w-full">
         <CardContent className="p-0">
           <div className="flex justify-between items-center text-white">
@@ -540,7 +571,7 @@ export default function WeeklyTaskManager() {
             <Settings className="h-6 w-6 mb-1" />
             <span className="text-xs">Settings</span>
           </Link>
-          <button onClick={() => alert('Sign out logic goes here!')} className="flex flex-col items-center text-gray-300 hover:text-red-400 transition focus:outline-none">
+          <button onClick={handleSignOut} className="flex flex-col items-center text-gray-300 hover:text-red-400 transition focus:outline-none">
             <LogOut className="h-6 w-6 mb-1" />
             <span className="text-xs">Sign Out</span>
           </button>

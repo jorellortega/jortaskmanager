@@ -187,6 +187,15 @@ export default function PeerSyncPage() {
           </CardContent>
         </Card>
       )}
+      {/* Under Development Card */}
+      <div className="container mx-auto mt-4 flex justify-center">
+        <Card className="bg-yellow-100 border-yellow-400 text-yellow-900 w-full max-w-md">
+          <CardContent className="flex flex-col items-center">
+            <span className="font-bold text-lg">🚧 Under Development 🚧</span>
+            <span className="text-sm">This feature is currently being built.</span>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

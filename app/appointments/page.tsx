@@ -10,48 +10,101 @@ import { Label } from "@/components/ui/label"
 import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { format } from "date-fns"
+import { supabase } from "@/lib/supabaseClient"
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 
 export type Appointment = {
-  id: number
+  id: string
+  user_id: string
   title: string
   date: string
   time: string
+  created_at?: string
 }
 
 export default function AppointmentsPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [newAppointment, setNewAppointment] = useState({ title: "", date: "", time: "" })
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
+
+  // Generate time options in 30-minute intervals, display as 12-hour with AM/PM, value as 24-hour HH:MM:SS
+  const timeOptions = Array.from({ length: 24 * 2 }, (_, i) => {
+    const hour24 = Math.floor(i / 2);
+    const min = i % 2 === 0 ? '00' : '30';
+    const hour12 = ((hour24 + 11) % 12) + 1;
+    const ampm = hour24 < 12 ? 'AM' : 'PM';
+    const display = `${hour12.toString().padStart(2, '0')}:${min} ${ampm}`;
+    const value = `${hour24.toString().padStart(2, '0')}:${min}:00`;
+    return { display, value };
+  });
 
   useEffect(() => {
-    try {
-      const storedAppointments = localStorage.getItem("appointments")
-      if (storedAppointments) {
-        setAppointments(JSON.parse(storedAppointments))
+    const getUserAndAppointments = async () => {
+      setLoading(true)
+      setError(null)
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        setError("You must be logged in to view appointments.")
+        setLoading(false)
+        return
       }
-    } catch (err) {
-      console.error("Error loading appointments:", err)
-      setError("Failed to load appointments. Please try refreshing the page.")
+      setUserId(user.id)
+      const { data, error: fetchError } = await supabase
+        .from("appointments")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("date", { ascending: true })
+      if (fetchError) {
+        setError("Failed to fetch appointments.")
+      } else {
+        setAppointments(data || [])
+      }
+      setLoading(false)
     }
+    getUserAndAppointments()
   }, [])
 
-  const addAppointment = (e: React.FormEvent) => {
+  const addAppointment = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError(null)
+    if (!userId) {
+      setError("You must be logged in to add appointments.")
+      return
+    }
     if (newAppointment.title && newAppointment.date && newAppointment.time) {
-      try {
-        const updatedAppointments = [...appointments, { id: Date.now(), ...newAppointment }]
-        setAppointments(updatedAppointments)
-        localStorage.setItem("appointments", JSON.stringify(updatedAppointments))
+      setLoading(true)
+      // No need to reformat, already HH:MM:SS
+      const { data, error: insertError } = await supabase
+        .from("appointments")
+        .insert([
+          {
+            user_id: userId,
+            title: newAppointment.title,
+            date: newAppointment.date,
+            time: newAppointment.time,
+          },
+        ])
+        .select()
+      console.log("Insert result:", data, insertError)
+      if (insertError) {
+        setError(insertError.message || "Failed to add appointment. Please try again.")
+      } else if (data && data.length > 0) {
+        setAppointments((prev) => [...prev, data[0]])
         setNewAppointment({ title: "", date: "", time: "" })
-      } catch (err) {
-        console.error("Error adding appointment:", err)
-        setError("Failed to add appointment. Please try again.")
+      } else {
+        setError("No data returned from Supabase. Check your table schema and required fields.")
       }
+      setLoading(false)
     }
   }
 
   if (error) {
-    return <div className="text-red-500">{error}</div>
+    return <div className="text-red-500 p-4">{error}</div>
+  }
+  if (loading && appointments.length === 0) {
+    return <div className="text-white p-4">Loading...</div>
   }
 
   return (
@@ -87,15 +140,23 @@ export default function AppointmentsPage() {
             </div>
             <div>
               <Label htmlFor="time">Time</Label>
-              <Input
-                id="time"
-                type="time"
+              <Select
                 value={newAppointment.time}
-                onChange={(e) => setNewAppointment({ ...newAppointment, time: e.target.value })}
-                className="bg-gray-700 text-white"
-              />
+                onValueChange={(value) => setNewAppointment({ ...newAppointment, time: value })}
+              >
+                <SelectTrigger id="time" className="bg-gray-700 text-white w-full rounded px-3 py-2">
+                  <SelectValue placeholder="Select a time" />
+                </SelectTrigger>
+                <SelectContent>
+                  {timeOptions.map(({ display, value }) => (
+                    <SelectItem key={value} value={value}>
+                      {display}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <Button type="submit">Add Appointment</Button>
+            <Button type="submit" disabled={loading}>{loading ? "Adding..." : "Add Appointment"}</Button>
           </form>
         </CardContent>
       </Card>

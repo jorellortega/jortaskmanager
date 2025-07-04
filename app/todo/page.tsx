@@ -12,110 +12,135 @@ import Link from "next/link"
 import { format, addDays, isBefore, parseISO, startOfWeek } from "date-fns"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
+import { supabase } from "@/lib/supabaseClient"
 
 type Todo = {
-  id: number
-  text: string
+  id: string
+  user_id: string
+  task: string
+  due_date: string | null
   completed: boolean
-  dueDate: string | ""
-  isOverdue: boolean
+  created_at?: string
 }
 
-const mockTodos: Todo[] = [
-  {
-    id: 1,
-    text: "Complete project proposal",
-    completed: false,
-    dueDate: format(addDays(new Date(), 2), "yyyy-MM-dd"),
-    isOverdue: false,
-  },
-  {
-    id: 2,
-    text: "Review team presentations",
-    completed: false,
-    dueDate: format(addDays(new Date(), 1), "yyyy-MM-dd"),
-    isOverdue: false,
-  },
-  {
-    id: 3,
-    text: "Update client documentation",
-    completed: false,
-    dueDate: format(addDays(new Date(), 3), "yyyy-MM-dd"),
-    isOverdue: false,
-  },
-  {
-    id: 4,
-    text: "Prepare for quarterly meeting",
-    completed: false,
-    dueDate: format(addDays(new Date(), 5), "yyyy-MM-dd"),
-    isOverdue: false,
-  },
-  {
-    id: 5,
-    text: "Finalize budget report",
-    completed: false,
-    dueDate: format(addDays(new Date(), -1), "yyyy-MM-dd"),
-    isOverdue: true,
-  },
-]
-
 export default function TodoPage() {
-  const [todos, setTodos] = useState<Todo[]>(mockTodos)
+  const [todos, setTodos] = useState<Todo[]>([])
   const [newTodo, setNewTodo] = useState("")
   const [newDueDate, setNewDueDate] = useState(format(new Date(), "yyyy-MM-dd"))
-  const [editingDate, setEditingDate] = useState<number | null>(null)
+  const [editingDate, setEditingDate] = useState<string | null>(null)
   const [selectedDay, setSelectedDay] = useState<string>(format(new Date(), "EEEE"))
   const [isDateEnabled, setIsDateEnabled] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
+  const [editingTaskText, setEditingTaskText] = useState<string>("")
 
-  const updateOverdueStatus = useCallback((todos: Todo[]) => {
-    const today = new Date()
-    return todos.map((todo) => ({
-      ...todo,
-      isOverdue: todo.dueDate && isBefore(parseISO(todo.dueDate), today) && !todo.completed,
-    }))
-  }, [])
-
+  // Get current user and fetch todos
   useEffect(() => {
-    const storedTodos = localStorage.getItem("todos")
-    if (storedTodos) {
-      setTodos(JSON.parse(storedTodos))
-    }
-  }, [])
-
-  const updatedTodos = useMemo(() => updateOverdueStatus(todos), [todos, updateOverdueStatus])
-
-  useEffect(() => {
-    localStorage.setItem("todos", JSON.stringify(updatedTodos))
-  }, [updatedTodos])
-
-  const addTodo = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (newTodo.trim()) {
-      const newTodoItem: Todo = {
-        id: Date.now(),
-        text: newTodo.trim(),
-        completed: false,
-        dueDate: isDateEnabled ? newDueDate : "",
-        isOverdue: isDateEnabled ? isBefore(parseISO(newDueDate), new Date()) : false,
+    const fetchTodos = async () => {
+      setLoading(true)
+      setError(null)
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        setError("You must be logged in to view todos.")
+        setLoading(false)
+        return
       }
-      setTodos((prevTodos) => updateOverdueStatus([...prevTodos, newTodoItem]))
-      setNewTodo("")
-      setNewDueDate(format(new Date(), "yyyy-MM-dd"))
-      setIsDateEnabled(false)
+      setUserId(user.id)
+      const { data, error: fetchError } = await supabase
+        .from("todos")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("due_date", { ascending: true })
+      if (fetchError) {
+        setError("Failed to fetch todos.")
+      } else {
+        setTodos(data || [])
+      }
+      setLoading(false)
+    }
+    fetchTodos()
+  }, [])
+
+  const addTodo = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    if (!userId) {
+      setError("You must be logged in to add todos.")
+      return
+    }
+    if (newTodo.trim()) {
+      setLoading(true)
+      const { data, error: insertError } = await supabase
+        .from("todos")
+        .insert([
+          {
+            user_id: userId,
+            task: newTodo.trim(),
+            due_date: isDateEnabled ? newDueDate : null,
+            completed: false,
+          },
+        ])
+        .select()
+      if (insertError) {
+        setError(insertError.message || "Failed to add todo. Please try again.")
+      } else if (data && data.length > 0) {
+        setTodos((prev) => [...prev, data[0]])
+        setNewTodo("")
+        setNewDueDate(format(new Date(), "yyyy-MM-dd"))
+        setIsDateEnabled(false)
+      }
+      setLoading(false)
     }
   }
 
-  const toggleTodo = (id: number) => {
-    setTodos((prevTodos) =>
-      updateOverdueStatus(prevTodos.map((todo) => (todo.id === id ? { ...todo, completed: !todo.completed } : todo))),
-    )
+  const toggleTodo = async (id: string, completed: boolean) => {
+    setError(null)
+    setLoading(true)
+    const { data, error: updateError } = await supabase
+      .from("todos")
+      .update({ completed: !completed })
+      .eq("id", id)
+      .select()
+    if (updateError) {
+      setError(updateError.message || "Failed to update todo.")
+    } else if (data && data.length > 0) {
+      setTodos((prev) => prev.map((todo) => (todo.id === id ? data[0] : todo)))
+    }
+    setLoading(false)
   }
 
-  const updateDueDate = (id: number, newDate: string) => {
-    setTodos((prevTodos) =>
-      updateOverdueStatus(prevTodos.map((todo) => (todo.id === id ? { ...todo, dueDate: newDate } : todo))),
-    )
-    setEditingDate(null)
+  const updateDueDate = async (id: string, newDate: string) => {
+    setError(null)
+    setLoading(true)
+    const { data, error: updateError } = await supabase
+      .from("todos")
+      .update({ due_date: newDate })
+      .eq("id", id)
+      .select()
+    if (updateError) {
+      setError(updateError.message || "Failed to update due date.")
+    } else if (data && data.length > 0) {
+      setTodos((prev) => prev.map((todo) => (todo.id === id ? data[0] : todo)))
+      setEditingDate(null)
+    }
+    setLoading(false)
+  }
+
+  const deleteTodo = async (id: string) => {
+    setError(null)
+    setLoading(true)
+    const { error: deleteError } = await supabase
+      .from("todos")
+      .delete()
+      .eq("id", id)
+    if (deleteError) {
+      setError(deleteError.message || "Failed to delete todo.")
+    } else {
+      setTodos((prev) => prev.filter((todo) => todo.id !== id))
+    }
+    setLoading(false)
   }
 
   const getWeekDays = useCallback(() => {
@@ -128,11 +153,31 @@ export default function TodoPage() {
 
   const getTodosForDay = (day: string) => {
     const date = format(addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), weekDays.indexOf(day)), "yyyy-MM-dd")
-    return todos.filter((todo) => todo.dueDate === date)
+    return todos.filter((todo) => todo.due_date === date)
   }
 
-  const deleteTodo = (id: number) => {
-    setTodos((prevTodos) => updateOverdueStatus(prevTodos.filter((todo) => todo.id !== id)))
+  const startEditingTask = (id: string, currentText: string) => {
+    setEditingTaskId(id)
+    setEditingTaskText(currentText)
+  }
+
+  const saveEditingTask = async (id: string) => {
+    if (!editingTaskText.trim()) return
+    setLoading(true)
+    setError(null)
+    const { data, error: updateError } = await supabase
+      .from("todos")
+      .update({ task: editingTaskText.trim() })
+      .eq("id", id)
+      .select()
+    if (updateError) {
+      setError(updateError.message || "Failed to update task text.")
+    } else if (data && data.length > 0) {
+      setTodos((prev) => prev.map((todo) => (todo.id === id ? data[0] : todo)))
+      setEditingTaskId(null)
+      setEditingTaskText("")
+    }
+    setLoading(false)
   }
 
   return (
@@ -205,12 +250,33 @@ export default function TodoPage() {
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     checked={todo.completed}
-                    onCheckedChange={() => toggleTodo(todo.id)}
+                    onCheckedChange={() => toggleTodo(todo.id, todo.completed)}
                     className="border-gray-400"
                   />
                   <span className={`${todo.completed ? "line-through text-gray-500" : "text-white"} flex items-center`}>
-                    {todo.isOverdue && <AlertCircle className="h-4 w-4 text-red-500 mr-2" />}
-                    {todo.text}
+                    {editingTaskId === todo.id ? (
+                      <input
+                        type="text"
+                        value={editingTaskText}
+                        autoFocus
+                        onChange={e => setEditingTaskText(e.target.value)}
+                        onBlur={() => saveEditingTask(todo.id)}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") {
+                            saveEditingTask(todo.id)
+                          }
+                        }}
+                        className="bg-[#1A1A1B] border-gray-700 text-white rounded px-2 py-1 w-full"
+                      />
+                    ) : (
+                      <span
+                        onClick={() => startEditingTask(todo.id, todo.task)}
+                        className="cursor-pointer hover:underline"
+                        title="Click to edit"
+                      >
+                        {todo.task}
+                      </span>
+                    )}
                   </span>
                 </div>
                 <Button
@@ -229,16 +295,16 @@ export default function TodoPage() {
                 const input = e.currentTarget.elements.namedItem("newTodo") as HTMLInputElement
                 if (input.value.trim()) {
                   const newTodoItem: Todo = {
-                    id: Date.now(),
-                    text: input.value.trim(),
-                    completed: false,
-                    dueDate: format(
+                    id: Date.now().toString(),
+                    user_id: userId || "",
+                    task: input.value.trim(),
+                    due_date: format(
                       addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), weekDays.indexOf(selectedDay)),
                       "yyyy-MM-dd",
                     ),
-                    isOverdue: false,
+                    completed: false,
                   }
-                  setTodos((prevTodos) => updateOverdueStatus([...prevTodos, newTodoItem]))
+                  setTodos((prevTodos) => [...prevTodos, newTodoItem])
                   input.value = ""
                 }
               }}
@@ -270,14 +336,35 @@ export default function TodoPage() {
                   <div className="flex items-center space-x-2">
                     <Checkbox
                       checked={todo.completed}
-                      onCheckedChange={() => toggleTodo(todo.id)}
+                      onCheckedChange={() => toggleTodo(todo.id, todo.completed)}
                       className="border-gray-400"
                     />
                     <span
                       className={`${todo.completed ? "line-through text-gray-500" : "text-white"} flex items-center`}
                     >
-                      {todo.isOverdue && <AlertCircle className="h-4 w-4 text-red-500 mr-2" />}
-                      {todo.text}
+                      {editingTaskId === todo.id ? (
+                        <input
+                          type="text"
+                          value={editingTaskText}
+                          autoFocus
+                          onChange={e => setEditingTaskText(e.target.value)}
+                          onBlur={() => saveEditingTask(todo.id)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") {
+                              saveEditingTask(todo.id)
+                            }
+                          }}
+                          className="bg-[#1A1A1B] border-gray-700 text-white rounded px-2 py-1 w-full"
+                        />
+                      ) : (
+                        <span
+                          onClick={() => startEditingTask(todo.id, todo.task)}
+                          className="cursor-pointer hover:underline"
+                          title="Click to edit"
+                        >
+                          {todo.task}
+                        </span>
+                      )}
                     </span>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -293,7 +380,7 @@ export default function TodoPage() {
                         <Input
                           type="date"
                           name="date"
-                          defaultValue={todo.dueDate}
+                          defaultValue={todo.due_date || ""}
                           className="bg-[#1A1A1B] border-gray-700 text-white w-32"
                         />
                         <Button
@@ -308,7 +395,7 @@ export default function TodoPage() {
                     ) : (
                       <span className="text-sm text-gray-400 flex items-center">
                         <Calendar className="h-4 w-4 inline mr-1" />
-                        {todo.dueDate}
+                        {todo.due_date}
                         <Button
                           size="icon"
                           variant="ghost"
