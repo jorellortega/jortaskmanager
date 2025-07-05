@@ -8,39 +8,23 @@ import { Textarea } from "@/components/ui/textarea"
 import { Utensils, Plus, Pencil, Trash2, Save, X, ArrowLeft } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import Link from "next/link"
+import { supabase } from "@/lib/supabaseClient"
 
 type MealPlan = {
-  id: number
+  id: string
+  user_id: string
   day: string
   breakfast: string
   lunch: string
   dinner: string
   snacks: string[]
+  created_at?: string
 }
 
-const sampleMealPlans: MealPlan[] = [
-  {
-    id: 1,
-    day: "Monday",
-    breakfast: "Oatmeal with fruits",
-    lunch: "Chicken salad",
-    dinner: "Grilled salmon with vegetables",
-    snacks: ["Apple", "Yogurt"]
-  },
-  {
-    id: 2,
-    day: "Tuesday",
-    breakfast: "Smoothie bowl",
-    lunch: "Quinoa bowl",
-    dinner: "Vegetable stir-fry",
-    snacks: ["Nuts", "Banana"]
-  }
-]
-
 export default function MealPlanning() {
-  const [mealPlans, setMealPlans] = useState<MealPlan[]>(sampleMealPlans)
+  const [mealPlans, setMealPlans] = useState<MealPlan[]>([])
   const [editingPlan, setEditingPlan] = useState<MealPlan | null>(null)
-  const [newPlan, setNewPlan] = useState<Omit<MealPlan, 'id'>>({
+  const [newPlan, setNewPlan] = useState<Omit<MealPlan, 'id' | 'user_id' | 'created_at'>>({
     day: "",
     breakfast: "",
     lunch: "",
@@ -48,48 +32,116 @@ export default function MealPlanning() {
     snacks: []
   })
   const [newSnack, setNewSnack] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    const storedPlans = localStorage.getItem("mealPlans")
-    if (storedPlans) {
-      setMealPlans(JSON.parse(storedPlans))
-    } else {
-      localStorage.setItem("mealPlans", JSON.stringify(sampleMealPlans))
+    const fetchPlans = async () => {
+      setLoading(true)
+      setError(null)
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        setError("You must be logged in to view meal plans.")
+        setLoading(false)
+        return
+      }
+      setUserId(user.id)
+      const { data, error: fetchError } = await supabase
+        .from("meal_plans")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true })
+      if (fetchError) {
+        setError("Failed to fetch meal plans.")
+      } else {
+        setMealPlans(data || [])
+      }
+      setLoading(false)
     }
+    fetchPlans()
   }, [])
 
-  const handleSave = () => {
-    if (editingPlan) {
-      const updatedPlans = mealPlans.map(plan => 
-        plan.id === editingPlan.id ? editingPlan : plan
-      )
-      setMealPlans(updatedPlans)
-      localStorage.setItem("mealPlans", JSON.stringify(updatedPlans))
+  const handleAddPlan = async () => {
+    setError(null)
+    if (!userId) {
+      setError("You must be logged in to add meal plans.")
+      return
+    }
+    if (newPlan.day.trim()) {
+      setLoading(true)
+      const snacksArray = Array.isArray(newPlan.snacks)
+        ? newPlan.snacks.filter(s => typeof s === 'string' && s.trim() !== '')
+        : [];
+      console.log('Inserting meal plan:', {
+        user_id: userId,
+        day: newPlan.day.trim(),
+        breakfast: newPlan.breakfast,
+        lunch: newPlan.lunch,
+        dinner: newPlan.dinner,
+        snacks: snacksArray,
+      });
+      const { data, error: insertError } = await supabase
+        .from("meal_plans")
+        .insert([
+          {
+            user_id: userId,
+            day: newPlan.day.trim(),
+            breakfast: newPlan.breakfast,
+            lunch: newPlan.lunch,
+            dinner: newPlan.dinner,
+            snacks: snacksArray,
+          },
+        ])
+        .select()
+      if (insertError) {
+        setError(insertError.message || "Failed to add meal plan. Please try again.")
+        console.error('Supabase insert error:', insertError)
+      } else if (data && data.length > 0) {
+        setMealPlans((prev) => [...prev, data[0]])
+        setNewPlan({ day: "", breakfast: "", lunch: "", dinner: "", snacks: [] })
+      }
+      setLoading(false)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    setError(null)
+    setLoading(true)
+    const { error: deleteError } = await supabase
+      .from("meal_plans")
+      .delete()
+      .eq("id", id)
+    if (deleteError) {
+      setError(deleteError.message || "Failed to delete meal plan.")
+    } else {
+      setMealPlans((prev) => prev.filter((plan) => plan.id !== id))
+    }
+    setLoading(false)
+  }
+
+  const handleSave = async () => {
+    if (!editingPlan) return
+    setError(null)
+    setLoading(true)
+    const { data, error: updateError } = await supabase
+      .from("meal_plans")
+      .update({
+        day: editingPlan.day,
+        breakfast: editingPlan.breakfast,
+        lunch: editingPlan.lunch,
+        dinner: editingPlan.dinner,
+        snacks: editingPlan.snacks,
+      })
+      .eq("id", editingPlan.id)
+      .select()
+    if (updateError) {
+      setError(updateError.message || "Failed to update meal plan.")
+    } else if (data && data.length > 0) {
+      setMealPlans((prev) => prev.map((plan) => plan.id === editingPlan.id ? data[0] : plan))
       setEditingPlan(null)
     }
-  }
-
-  const handleDelete = (id: number) => {
-    const updatedPlans = mealPlans.filter(plan => plan.id !== id)
-    setMealPlans(updatedPlans)
-    localStorage.setItem("mealPlans", JSON.stringify(updatedPlans))
-  }
-
-  const handleAddPlan = () => {
-    const newPlanWithId = {
-      ...newPlan,
-      id: Date.now()
-    }
-    const updatedPlans = [...mealPlans, newPlanWithId]
-    setMealPlans(updatedPlans)
-    localStorage.setItem("mealPlans", JSON.stringify(updatedPlans))
-    setNewPlan({
-      day: "",
-      breakfast: "",
-      lunch: "",
-      dinner: "",
-      snacks: []
-    })
+    setLoading(false)
   }
 
   const handleAddSnack = () => {

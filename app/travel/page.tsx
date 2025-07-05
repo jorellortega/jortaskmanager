@@ -11,91 +11,134 @@ import { Textarea } from "@/components/ui/textarea"
 import { ArrowLeft, Plane, Calendar, MapPin, Trash2, Edit2, Plus } from "lucide-react"
 import Link from "next/link"
 import { format } from "date-fns"
+import { supabase } from "@/lib/supabaseClient"
 
 type TravelPlan = {
-  id: number
+  id: string
+  user_id: string
   destination: string
-  startDate: string
-  endDate: string
-  notes: string
+  start_date: string
+  end_date: string
+  notes: string | null
+  created_at: string
 }
-
-const mockTravelPlans: TravelPlan[] = [
-  {
-    id: 1,
-    destination: "Tokyo, Japan",
-    startDate: "2024-05-15",
-    endDate: "2024-05-25",
-    notes: "Visit Shibuya Crossing, try authentic ramen, explore Akihabara district",
-  },
-  {
-    id: 2,
-    destination: "Paris, France",
-    startDate: "2024-06-10",
-    endDate: "2024-06-20",
-    notes: "Eiffel Tower, Louvre Museum, Seine River cruise, try French pastries",
-  },
-  {
-    id: 3,
-    destination: "New York City, USA",
-    startDate: "2024-07-05",
-    endDate: "2024-07-12",
-    notes: "Times Square, Central Park, Broadway show, visit museums",
-  },
-  {
-    id: 4,
-    destination: "Bali, Indonesia",
-    startDate: "2024-08-20",
-    endDate: "2024-09-05",
-    notes: "Beach resorts, temple visits, surfing lessons, local cuisine",
-  },
-  {
-    id: 5,
-    destination: "Rome, Italy",
-    startDate: "2024-09-15",
-    endDate: "2024-09-25",
-    notes: "Colosseum, Vatican City, Trevi Fountain, authentic Italian food",
-  }
-]
 
 export default function TravelPage() {
   const [travelPlans, setTravelPlans] = useState<TravelPlan[]>([])
-  const [newPlan, setNewPlan] = useState<Omit<TravelPlan, "id">>({
+  const [newPlan, setNewPlan] = useState<{ destination: string; start_date: string; end_date: string; notes: string }>({
     destination: "",
-    startDate: "",
-    endDate: "",
+    start_date: "",
+    end_date: "",
     notes: "",
   })
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editedPlan, setEditedPlan] = useState<{ destination: string; start_date: string; end_date: string; notes: string }>({ destination: "", start_date: "", end_date: "", notes: "" })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    const storedPlans = localStorage.getItem("travelPlans")
-    if (storedPlans) {
-      setTravelPlans(JSON.parse(storedPlans))
-    } else {
-      setTravelPlans(mockTravelPlans)
+    const fetchPlans = async () => {
+      setLoading(true)
+      setError(null)
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        setError("You must be logged in to view travel plans.")
+        setLoading(false)
+        return
+      }
+      setUserId(user.id)
+      const { data, error: fetchError } = await supabase
+        .from("travel_plans")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("start_date", { ascending: true })
+      if (fetchError) {
+        setError("Failed to fetch travel plans.")
+      } else {
+        setTravelPlans(data || [])
+      }
+      setLoading(false)
     }
+    fetchPlans()
   }, [])
 
-  useEffect(() => {
-    localStorage.setItem("travelPlans", JSON.stringify(travelPlans))
-  }, [travelPlans])
-
-  const addPlan = (e: React.FormEvent) => {
+  const addPlan = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (newPlan.destination && newPlan.startDate && newPlan.endDate) {
-      setTravelPlans([...travelPlans, { ...newPlan, id: Date.now() }])
-      setNewPlan({ destination: "", startDate: "", endDate: "", notes: "" })
+    setError(null)
+    if (!userId) {
+      setError("You must be logged in to add travel plans.")
+      return
+    }
+    if (newPlan.destination && newPlan.start_date && newPlan.end_date) {
+      setLoading(true)
+      const { data, error: insertError } = await supabase
+        .from("travel_plans")
+        .insert([
+          {
+            user_id: userId,
+            destination: newPlan.destination,
+            start_date: newPlan.start_date,
+            end_date: newPlan.end_date,
+            notes: newPlan.notes || null,
+          },
+        ])
+        .select()
+      if (insertError) {
+        setError(insertError.message || "Failed to add travel plan.")
+      } else if (data && data.length > 0) {
+        setTravelPlans((prev) => [...prev, data[0]])
+        setNewPlan({ destination: "", start_date: "", end_date: "", notes: "" })
+      }
+      setLoading(false)
     }
   }
 
-  const updatePlan = (id: number, updatedPlan: Omit<TravelPlan, "id">) => {
-    setTravelPlans(travelPlans.map((plan) => (plan.id === id ? { ...plan, ...updatedPlan } : plan)))
-    setEditingId(null)
+  const startEdit = (plan: TravelPlan) => {
+    setEditingId(plan.id)
+    setEditedPlan({
+      destination: plan.destination,
+      start_date: plan.start_date,
+      end_date: plan.end_date,
+      notes: plan.notes || "",
+    })
   }
 
-  const deletePlan = (id: number) => {
-    setTravelPlans(travelPlans.filter((plan) => plan.id !== id))
+  const updatePlan = async (id: string, updatedPlan: { destination: string; start_date: string; end_date: string; notes: string }) => {
+    setError(null)
+    setLoading(true)
+    const { data, error: updateError } = await supabase
+      .from("travel_plans")
+      .update({
+        destination: updatedPlan.destination,
+        start_date: updatedPlan.start_date,
+        end_date: updatedPlan.end_date,
+        notes: updatedPlan.notes || null,
+      })
+      .eq("id", id)
+      .select()
+    if (updateError) {
+      setError(updateError.message || "Failed to update travel plan.")
+    } else if (data && data.length > 0) {
+      setTravelPlans((prev) => prev.map((plan) => plan.id === id ? data[0] : plan))
+      setEditingId(null)
+    }
+    setLoading(false)
+  }
+
+  const deletePlan = async (id: string) => {
+    setError(null)
+    setLoading(true)
+    const { error: deleteError } = await supabase
+      .from("travel_plans")
+      .delete()
+      .eq("id", id)
+    if (deleteError) {
+      setError(deleteError.message || "Failed to delete travel plan.")
+    } else {
+      setTravelPlans((prev) => prev.filter((plan) => plan.id !== id))
+    }
+    setLoading(false)
   }
 
   return (
@@ -106,6 +149,8 @@ export default function TravelPage() {
       <h1 className="text-2xl font-bold mb-4 flex items-center text-white">
         <Plane className="mr-2" /> Travel & Vacation Plans
       </h1>
+      {error && <div className="bg-red-900 text-red-200 p-2 mb-4 rounded">{error}</div>}
+      {loading && <div className="text-blue-300 mb-2">Loading...</div>}
       <Card className="bg-[#141415] border border-gray-700 mb-4">
         <CardHeader>
           <CardTitle className="text-white flex items-center">
@@ -124,31 +169,34 @@ export default function TravelPage() {
                 onChange={(e) => setNewPlan({ ...newPlan, destination: e.target.value })}
                 className="bg-[#1A1A1B] border-gray-700 text-white"
                 placeholder="Enter destination"
+                required
               />
             </div>
             <div className="flex space-x-4">
               <div className="flex-1">
-                <Label htmlFor="startDate" className="text-white">
+                <Label htmlFor="start_date" className="text-white">
                   Start Date
                 </Label>
                 <Input
-                  id="startDate"
+                  id="start_date"
                   type="date"
-                  value={newPlan.startDate}
-                  onChange={(e) => setNewPlan({ ...newPlan, startDate: e.target.value })}
+                  value={newPlan.start_date}
+                  onChange={(e) => setNewPlan({ ...newPlan, start_date: e.target.value })}
                   className="bg-[#1A1A1B] border-gray-700 text-white"
+                  required
                 />
               </div>
               <div className="flex-1">
-                <Label htmlFor="endDate" className="text-white">
+                <Label htmlFor="end_date" className="text-white">
                   End Date
                 </Label>
                 <Input
-                  id="endDate"
+                  id="end_date"
                   type="date"
-                  value={newPlan.endDate}
-                  onChange={(e) => setNewPlan({ ...newPlan, endDate: e.target.value })}
+                  value={newPlan.end_date}
+                  onChange={(e) => setNewPlan({ ...newPlan, end_date: e.target.value })}
                   className="bg-[#1A1A1B] border-gray-700 text-white"
+                  required
                 />
               </div>
             </div>
@@ -164,8 +212,8 @@ export default function TravelPage() {
                 placeholder="Enter any additional notes"
               />
             </div>
-            <Button type="submit" className="w-full">
-              Add Travel Plan
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Adding..." : "Add Travel Plan"}
             </Button>
           </form>
         </CardContent>
@@ -178,41 +226,40 @@ export default function TravelPage() {
                 <form
                   onSubmit={(e) => {
                     e.preventDefault()
-                    updatePlan(plan.id, {
-                      destination: e.currentTarget.destination.value,
-                      startDate: e.currentTarget.startDate.value,
-                      endDate: e.currentTarget.endDate.value,
-                      notes: e.currentTarget.notes.value,
-                    })
+                    updatePlan(plan.id, editedPlan)
                   }}
                   className="space-y-4"
                 >
                   <Input
                     name="destination"
-                    defaultValue={plan.destination}
+                    value={editedPlan.destination}
+                    onChange={(e) => setEditedPlan({ ...editedPlan, destination: e.target.value })}
                     className="bg-[#1A1A1B] border-gray-700 text-white"
                   />
                   <div className="flex space-x-4">
                     <Input
-                      name="startDate"
+                      name="start_date"
                       type="date"
-                      defaultValue={plan.startDate}
+                      value={editedPlan.start_date}
+                      onChange={(e) => setEditedPlan({ ...editedPlan, start_date: e.target.value })}
                       className="bg-[#1A1A1B] border-gray-700 text-white"
                     />
                     <Input
-                      name="endDate"
+                      name="end_date"
                       type="date"
-                      defaultValue={plan.endDate}
+                      value={editedPlan.end_date}
+                      onChange={(e) => setEditedPlan({ ...editedPlan, end_date: e.target.value })}
                       className="bg-[#1A1A1B] border-gray-700 text-white"
                     />
                   </div>
                   <Textarea
                     name="notes"
-                    defaultValue={plan.notes}
+                    value={editedPlan.notes}
+                    onChange={(e) => setEditedPlan({ ...editedPlan, notes: e.target.value })}
                     className="bg-[#1A1A1B] border-gray-700 text-white"
                   />
                   <div className="flex justify-end space-x-2">
-                    <Button type="submit">Save</Button>
+                    <Button type="submit" disabled={loading}>Save</Button>
                     <Button variant="outline" onClick={() => setEditingId(null)}>
                       Cancel
                     </Button>
@@ -225,14 +272,14 @@ export default function TravelPage() {
                   </h2>
                   <p className="text-sm text-white mb-2 flex items-center">
                     <Calendar className="mr-2" />
-                    {format(new Date(plan.startDate), "MMM d, yyyy")} - {format(new Date(plan.endDate), "MMM d, yyyy")}
+                    {format(new Date(plan.start_date), "MMM d, yyyy")} - {format(new Date(plan.end_date), "MMM d, yyyy")}
                   </p>
                   <p className="text-white mb-4">{plan.notes}</p>
                   <div className="flex justify-end space-x-2">
-                    <Button variant="outline" size="sm" onClick={() => setEditingId(plan.id)}>
+                    <Button variant="outline" size="sm" onClick={() => startEdit(plan)}>
                       <Edit2 className="mr-2 h-4 w-4" /> Edit
                     </Button>
-                    <Button variant="destructive" size="sm" onClick={() => deletePlan(plan.id)}>
+                    <Button variant="destructive" size="sm" onClick={() => deletePlan(plan.id)} disabled={loading}>
                       <Trash2 className="mr-2 h-4 w-4" /> Delete
                     </Button>
                   </div>

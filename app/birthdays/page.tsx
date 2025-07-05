@@ -10,31 +10,75 @@ import { Label } from "@/components/ui/label"
 import { ArrowLeft, Cake } from "lucide-react"
 import Link from "next/link"
 import { format } from "date-fns"
+import { supabase } from "@/lib/supabaseClient"
 
 type Birthday = {
-  id: number
+  id: string
+  user_id: string
   name: string
-  date: string
+  birthdate: string
+  created_at?: string
 }
 
 export default function BirthdaysPage() {
   const [birthdays, setBirthdays] = useState<Birthday[]>([])
-  const [newBirthday, setNewBirthday] = useState({ name: "", date: "" })
+  const [newBirthday, setNewBirthday] = useState({ name: "", birthdate: "" })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    const storedBirthdays = localStorage.getItem("birthdays")
-    if (storedBirthdays) {
-      setBirthdays(JSON.parse(storedBirthdays))
+    const fetchBirthdays = async () => {
+      setLoading(true)
+      setError(null)
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        setError("You must be logged in to view birthdays.")
+        setLoading(false)
+        return
+      }
+      setUserId(user.id)
+      const { data, error: fetchError } = await supabase
+        .from("birthdays")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("birthdate", { ascending: true })
+      if (fetchError) {
+        setError("Failed to fetch birthdays.")
+      } else {
+        setBirthdays(data || [])
+      }
+      setLoading(false)
     }
+    fetchBirthdays()
   }, [])
 
-  const addBirthday = (e: React.FormEvent) => {
+  const addBirthday = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (newBirthday.name && newBirthday.date) {
-      const updatedBirthdays = [...birthdays, { id: Date.now(), ...newBirthday }]
-      setBirthdays(updatedBirthdays)
-      localStorage.setItem("birthdays", JSON.stringify(updatedBirthdays))
-      setNewBirthday({ name: "", date: "" })
+    setError(null)
+    if (!userId) {
+      setError("You must be logged in to add birthdays.")
+      return
+    }
+    if (newBirthday.name && newBirthday.birthdate) {
+      setLoading(true)
+      const { data, error: insertError } = await supabase
+        .from("birthdays")
+        .insert([
+          {
+            user_id: userId,
+            name: newBirthday.name,
+            birthdate: newBirthday.birthdate,
+          },
+        ])
+        .select()
+      if (insertError) {
+        setError(insertError.message || "Failed to add birthday. Please try again.")
+      } else if (data && data.length > 0) {
+        setBirthdays((prev) => [...prev, data[0]])
+        setNewBirthday({ name: "", birthdate: "" })
+      }
+      setLoading(false)
     }
   }
 
@@ -69,8 +113,8 @@ export default function BirthdaysPage() {
               <Input
                 id="date"
                 type="date"
-                value={newBirthday.date}
-                onChange={(e) => setNewBirthday({ ...newBirthday, date: e.target.value })}
+                value={newBirthday.birthdate}
+                onChange={(e) => setNewBirthday({ ...newBirthday, birthdate: e.target.value })}
                 className="bg-[#1A1A1B] border-gray-700 text-white"
               />
             </div>
@@ -93,7 +137,7 @@ export default function BirthdaysPage() {
                 <li key={birthday.id} className="bg-[#1A1A1B] p-2 rounded flex items-center text-white">
                   <Cake className="h-5 w-5 text-pink-400 mr-2" />
                   <span>
-                    <strong>{birthday.name}</strong> - {format(new Date(birthday.date), "MMMM d")}
+                    <strong>{birthday.name}</strong> - {format(new Date(birthday.birthdate), "MMMM d")}
                   </span>
                 </li>
               ))}

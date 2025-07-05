@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,49 +10,82 @@ import Link from "next/link"
 import { format, addDays, isSameDay } from "date-fns"
 import QRCode from "react-qr-code"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { supabase } from "@/lib/supabaseClient"
 
-type CalendarEvent = {
-  id: number
-  title: string
-  date: Date
+type Peer = {
+  id: string
+  user_id: string
+  peer_user_id: string
+  status: string
+  created_at: string
 }
-
-// Mock user data
-const currentUserCalendar: CalendarEvent[] = [
-  { id: 1, title: "Team Meeting", date: new Date(2023, 5, 15, 10, 0) },
-  { id: 2, title: "Project Deadline", date: new Date(2023, 5, 20, 18, 0) },
-  { id: 3, title: "Lunch with Client", date: new Date(2023, 5, 18, 12, 30) },
-]
-
-const peerUserCalendar: CalendarEvent[] = [
-  { id: 1, title: "Conference Call", date: new Date(2023, 5, 16, 14, 0) },
-  { id: 2, title: "Team Building", date: new Date(2023, 5, 20, 9, 0) },
-  { id: 3, title: "Project Review", date: new Date(2023, 5, 19, 11, 0) },
-]
 
 export default function PeerSyncPage() {
   const [syncKey, setSyncKey] = useState("")
-  const [syncedCalendar, setSyncedCalendar] = useState<CalendarEvent[]>([])
-  const [openDates, setOpenDates] = useState<Date[]>([])
-  const [userCode] = useState(() => Math.random().toString(36).substr(2, 9))
   const [scannedCode, setScannedCode] = useState("")
+  const [userId, setUserId] = useState<string | null>(null)
+  const [userCode, setUserCode] = useState<string>("")
+  const [peers, setPeers] = useState<Peer[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleSync = (code: string) => {
-    // In a real application, you would validate the sync key and fetch the peer's calendar
-    // For this example, we'll use the mock peer calendar
-    const mergedCalendar = [...currentUserCalendar, ...peerUserCalendar]
-    setSyncedCalendar(mergedCalendar)
-
-    // Find open dates (dates without events) for the next 7 days
-    const today = new Date()
-    const openDatesList = []
-    for (let i = 0; i < 7; i++) {
-      const date = addDays(today, i)
-      if (!mergedCalendar.some((event) => isSameDay(event.date, date))) {
-        openDatesList.push(date)
+  useEffect(() => {
+    const fetchUserAndPeers = async () => {
+      setLoading(true)
+      setError(null)
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        setError("You must be logged in to view peers.")
+        setLoading(false)
+        return
       }
+      setUserId(user.id)
+      setUserCode(user.id)
+      const { data, error: fetchError } = await supabase
+        .from("peers")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+      if (fetchError) {
+        setError("Failed to fetch peers.")
+      } else {
+        setPeers(data || [])
+      }
+      setLoading(false)
     }
-    setOpenDates(openDatesList)
+    fetchUserAndPeers()
+    // eslint-disable-next-line
+  }, [])
+
+  const handleSync = async (code: string) => {
+    setError(null)
+    if (!userId) {
+      setError("You must be logged in to sync with a peer.")
+      return
+    }
+    if (!code || code === userId) {
+      setError("Please enter a valid peer sync code (not your own).")
+      return
+    }
+    setLoading(true)
+    const { data, error: insertError } = await supabase
+      .from("peers")
+      .insert([
+        {
+          user_id: userId,
+          peer_user_id: code,
+          status: "pending",
+        },
+      ])
+      .select()
+    if (insertError) {
+      setError(insertError.message || "Failed to sync with peer.")
+    } else if (data && data.length > 0) {
+      setPeers((prev) => [data[0], ...prev])
+      setSyncKey("")
+      setScannedCode("")
+    }
+    setLoading(false)
   }
 
   const handleScan = (result: string) => {
@@ -94,18 +127,18 @@ export default function PeerSyncPage() {
             >
               <div>
                 <Label htmlFor="syncKey" className="text-white">
-                  Sync Key
+                  Peer Sync Code
                 </Label>
                 <Input
                   id="syncKey"
                   value={syncKey}
                   onChange={(e) => setSyncKey(e.target.value)}
-                  placeholder="Enter peer's sync key"
+                  placeholder="Enter peer's sync code (user id)"
                   className="bg-[#1A1A1B] border-gray-700 text-white"
                 />
               </div>
               <Button type="submit" className="w-full">
-                Sync Calendars
+                Add Peer
               </Button>
             </form>
           </CardContent>
@@ -118,8 +151,8 @@ export default function PeerSyncPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col items-center">
-            <QRCode value={userCode} size={150} />
-            <p className="mt-4 text-lg font-semibold text-white">{userCode}</p>
+            {userCode && <QRCode value={userCode} size={150} />}
+            <p className="mt-4 text-lg font-semibold text-white break-all">{userCode}</p>
           </CardContent>
         </Card>
       </div>
@@ -147,52 +180,42 @@ export default function PeerSyncPage() {
           </div>
         </DialogContent>
       </Dialog>
-      {syncedCalendar.length > 0 && (
-        <Card className="bg-[#141415] border border-gray-700 mb-4">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center">
-              <Calendar className="mr-2" />
-              Synced Calendar
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+      <Card className="bg-[#141415] border border-gray-700 mb-4">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center">
+            <Users className="mr-2" />
+            Your Peers
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="text-blue-300 mb-2">Loading...</div>
+          ) : peers.length === 0 ? (
+            <p>No peers added yet.</p>
+          ) : (
             <ul className="space-y-2">
-              {syncedCalendar.map((event) => (
-                <li key={event.id} className="flex justify-between items-center">
-                  <span>{event.title}</span>
-                  <span className="text-gray-400">{format(event.date, "MMM d, yyyy HH:mm")}</span>
+              {peers.map((peer) => (
+                <li key={peer.id} className="flex flex-col md:flex-row md:justify-between md:items-center bg-[#1A1A1B] p-2 rounded">
+                  <div>
+                    <span className="font-semibold">Peer ID:</span> <span className="break-all">{peer.peer_user_id}</span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-2 md:mt-0">
+                    <span className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300">{peer.status}</span>
+                    <span className="text-xs text-gray-500">{format(new Date(peer.created_at), "MMM d, yyyy HH:mm")}</span>
+                  </div>
                 </li>
               ))}
             </ul>
-          </CardContent>
-        </Card>
-      )}
-      {openDates.length > 0 && (
-        <Card className="bg-[#141415] border border-gray-700">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center">
-              <Calendar className="mr-2" />
-              Open Dates
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2">
-              {openDates.map((date, index) => (
-                <li key={index} className="flex justify-between items-center">
-                  <span>{format(date, "EEEE")}</span>
-                  <span className="text-gray-400">{format(date, "MMM d, yyyy")}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
+      {error && <div className="bg-red-900 text-red-200 p-2 mb-4 rounded">{error}</div>}
       {/* Under Development Card */}
       <div className="container mx-auto mt-4 flex justify-center">
         <Card className="bg-yellow-100 border-yellow-400 text-yellow-900 w-full max-w-md">
           <CardContent className="flex flex-col items-center">
             <span className="font-bold text-lg">🚧 Under Development 🚧</span>
-            <span className="text-sm">This feature is currently being built.</span>
+            <span className="text-sm">Peer calendar sync is coming soon.</span>
           </CardContent>
         </Card>
       </div>

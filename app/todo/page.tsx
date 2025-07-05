@@ -79,7 +79,7 @@ export default function TodoPage() {
             user_id: userId,
             task: newTodo.trim(),
             due_date: isDateEnabled ? newDueDate : null,
-            completed: false,
+        completed: false,
           },
         ])
         .select()
@@ -87,10 +87,10 @@ export default function TodoPage() {
         setError(insertError.message || "Failed to add todo. Please try again.")
       } else if (data && data.length > 0) {
         setTodos((prev) => [...prev, data[0]])
-        setNewTodo("")
-        setNewDueDate(format(new Date(), "yyyy-MM-dd"))
-        setIsDateEnabled(false)
-      }
+      setNewTodo("")
+      setNewDueDate(format(new Date(), "yyyy-MM-dd"))
+      setIsDateEnabled(false)
+    }
       setLoading(false)
     }
   }
@@ -123,7 +123,7 @@ export default function TodoPage() {
       setError(updateError.message || "Failed to update due date.")
     } else if (data && data.length > 0) {
       setTodos((prev) => prev.map((todo) => (todo.id === id ? data[0] : todo)))
-      setEditingDate(null)
+    setEditingDate(null)
     }
     setLoading(false)
   }

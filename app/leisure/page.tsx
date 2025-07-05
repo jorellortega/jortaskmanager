@@ -10,55 +10,111 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { ArrowLeft, Trash2, Sun, Calendar } from "lucide-react"
 import Link from "next/link"
 import { format } from "date-fns"
+import { supabase } from "@/lib/supabaseClient"
 
 type LeisureActivity = {
-  id: number
+  id: string
+  user_id: string
   activity: string
-  date: string
+  activity_date: string
   completed: boolean
+  created_at?: string
 }
 
 export default function LeisurePage() {
   const [activities, setActivities] = useState<LeisureActivity[]>([])
   const [newActivity, setNewActivity] = useState("")
   const [newDate, setNewDate] = useState(format(new Date(), "yyyy-MM-dd"))
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    const storedActivities = localStorage.getItem("leisureActivities")
-    if (storedActivities) {
-      setActivities(JSON.parse(storedActivities))
+    const fetchActivities = async () => {
+      setLoading(true)
+      setError(null)
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        setError("You must be logged in to view leisure activities.")
+        setLoading(false)
+        return
+      }
+      setUserId(user.id)
+      const { data, error: fetchError } = await supabase
+        .from("leisure_activities")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("activity_date", { ascending: true })
+      if (fetchError) {
+        setError("Failed to fetch activities.")
+      } else {
+        setActivities(data || [])
+      }
+      setLoading(false)
     }
+    fetchActivities()
   }, [])
 
-  useEffect(() => {
-    localStorage.setItem("leisureActivities", JSON.stringify(activities))
-  }, [activities])
-
-  const addActivity = (e: React.FormEvent) => {
+  const addActivity = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError(null)
+    if (!userId) {
+      setError("You must be logged in to add activities.")
+      return
+    }
     if (newActivity.trim()) {
-      const newActivityItem: LeisureActivity = {
-        id: Date.now(),
-        activity: newActivity.trim(),
-        date: newDate,
-        completed: false,
+      setLoading(true)
+      const { data, error: insertError } = await supabase
+        .from("leisure_activities")
+        .insert([
+          {
+            user_id: userId,
+            activity: newActivity.trim(),
+            activity_date: newDate,
+            completed: false,
+          },
+        ])
+        .select()
+      if (insertError) {
+        setError(insertError.message || "Failed to add activity. Please try again.")
+      } else if (data && data.length > 0) {
+        setActivities((prev) => [...prev, data[0]])
+        setNewActivity("")
+        setNewDate(format(new Date(), "yyyy-MM-dd"))
       }
-      setActivities((prevActivities) => [...prevActivities, newActivityItem])
-      setNewActivity("")
-      setNewDate(format(new Date(), "yyyy-MM-dd"))
+      setLoading(false)
     }
   }
 
-  const toggleActivity = (id: number) => {
-    setActivities((prevActivities) =>
-      prevActivities.map((activity) =>
-        activity.id === id ? { ...activity, completed: !activity.completed } : activity,
-      ),
-    )
+  const toggleActivity = async (id: string, completed: boolean) => {
+    setError(null)
+    setLoading(true)
+    const { data, error: updateError } = await supabase
+      .from("leisure_activities")
+      .update({ completed: !completed })
+      .eq("id", id)
+      .select()
+    if (updateError) {
+      setError(updateError.message || "Failed to update activity.")
+    } else if (data && data.length > 0) {
+      setActivities((prev) => prev.map((a) => (a.id === id ? data[0] : a)))
+    }
+    setLoading(false)
   }
 
-  const deleteActivity = (id: number) => {
-    setActivities((prevActivities) => prevActivities.filter((activity) => activity.id !== id))
+  const deleteActivity = async (id: string) => {
+    setError(null)
+    setLoading(true)
+    const { error: deleteError } = await supabase
+      .from("leisure_activities")
+      .delete()
+      .eq("id", id)
+    if (deleteError) {
+      setError(deleteError.message || "Failed to delete activity.")
+    } else {
+      setActivities((prev) => prev.filter((a) => a.id !== id))
+    }
+    setLoading(false)
   }
 
   return (
@@ -109,7 +165,7 @@ export default function LeisurePage() {
                   <div className="flex items-center space-x-2">
                     <Checkbox
                       checked={activity.completed}
-                      onCheckedChange={() => toggleActivity(activity.id)}
+                      onCheckedChange={() => toggleActivity(activity.id, activity.completed)}
                       className="border-gray-400"
                     />
                     <span
@@ -122,7 +178,7 @@ export default function LeisurePage() {
                   <div className="flex items-center space-x-2">
                     <span className="text-sm text-gray-400 flex items-center">
                       <Calendar className="h-4 w-4 mr-1" />
-                      {activity.date}
+                      {activity.activity_date}
                     </span>
                     <Button
                       variant="ghost"

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft, Trash2 } from "lucide-react"
+import { ArrowLeft, Trash2, Info } from "lucide-react"
 import Link from "next/link"
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts"
 import { ChartCard } from "@/components/ui/chart-card"
@@ -218,7 +218,7 @@ export default function BrainstormingPage() {
   const [sixHatsThoughts, setSixHatsThoughts] = useState<SixHatsThought[]>(mockSixHatsThoughts)
   const [newSixHatsThought, setNewSixHatsThought] = useState({ hat: "", thought: "" })
   const [swotItems, setSwotItems] = useState<SwotItem[]>(mockSwotItems)
-  const [newSwotItem, setNewSwotItem] = useState({ category: "strengths" as const, text: "" })
+  const [newSwotItem, setNewSwotItem] = useState<{ category: "strengths" | "weaknesses" | "opportunities" | "threats"; text: string }>({ category: "strengths", text: "" })
 
   const addBubble = (e: React.FormEvent) => {
     e.preventDefault()
@@ -286,396 +286,295 @@ export default function BrainstormingPage() {
   )
 
   return (
-    <div className="container mx-auto p-4 bg-[#0E0E0F] min-h-screen text-white">
-      <Link href="/dashboard" className="flex items-center text-blue-500 hover:text-blue-400 mb-4">
-        <ArrowLeft className="mr-2" /> Back to Dashboard
-      </Link>
-      <h1 className="text-2xl font-bold mb-4">Brainstorming Tools</h1>
+    <div className="relative min-h-screen bg-gradient-to-br from-[#101217] via-[#181c24] to-[#0E0E0F] text-white pb-24">
+      <div className="fixed top-4 right-4 z-50 px-3 py-1 rounded-full bg-yellow-400/90 text-yellow-900 text-xs font-bold shadow-md border border-yellow-300 select-none pointer-events-none" style={{letterSpacing: '0.05em'}}>Under Construction</div>
+      <div className="sticky top-0 z-30 bg-gradient-to-b from-[#101217] to-transparent pt-2 pb-4">
+        <div className="container mx-auto flex items-center justify-between px-4">
+          <Link href="/dashboard" className="flex items-center text-blue-400 hover:text-blue-300 font-semibold">
+            <ArrowLeft className="mr-2" /> Dashboard
+          </Link>
+          <span className="text-xs text-gray-400 font-mono tracking-wide">Weekly Task Manager</span>
+        </div>
+        <div className="container mx-auto px-4 mt-2">
+          <h1 className="text-4xl font-extrabold mb-1 tracking-tight drop-shadow-lg flex items-center gap-2">
+            Brainstorming Tools
+            <Info className="h-6 w-6 text-blue-400 cursor-pointer" aria-label="A suite of creative tools to help you generate, organize, and visualize ideas." />
+          </h1>
+          <p className="text-lg text-blue-200/80 mb-2 font-medium">Unleash your creativity with maps, charts, and frameworks for every idea.</p>
+        </div>
+      </div>
 
-      <Tabs defaultValue="bubblemap" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6 bg-[#1A1A1B]">
-          <TabsTrigger
-            value="bubblemap"
-            className="data-[state=active]:bg-[#141415] data-[state=active]:text-white text-gray-400"
-          >
-            Bubble Map
-          </TabsTrigger>
-          <TabsTrigger
-            value="charts"
-            className="data-[state=active]:bg-[#141415] data-[state=active]:text-white text-gray-400"
-          >
-            Charts
-          </TabsTrigger>
-          <TabsTrigger
-            value="mindmap"
-            className="data-[state=active]:bg-[#141415] data-[state=active]:text-white text-gray-400"
-          >
-            Mind Map
-          </TabsTrigger>
-          <TabsTrigger
-            value="fishbone"
-            className="data-[state=active]:bg-[#141415] data-[state=active]:text-white text-gray-400"
-          >
-            Fishbone
-          </TabsTrigger>
-          <TabsTrigger
-            value="sixhats"
-            className="data-[state=active]:bg-[#141415] data-[state=active]:text-white text-gray-400"
-          >
-            Six Hats
-          </TabsTrigger>
-          <TabsTrigger
-            value="swot"
-            className="data-[state=active]:bg-[#141415] data-[state=active]:text-white text-gray-400"
-          >
-            SWOT
-          </TabsTrigger>
-        </TabsList>
+      <div className="container mx-auto px-2 md:px-4">
+        <Tabs defaultValue="bubblemap" className="space-y-8 mt-2">
+          <TabsList className="sticky top-20 z-20 flex w-full bg-[#181c24] rounded-xl shadow-lg border border-blue-900/30 overflow-x-auto gap-2 p-2 mb-6">
+            <TabsTrigger
+              value="bubblemap"
+              className="data-[state=active]:bg-[#141415] data-[state=active]:text-white text-gray-400"
+            >
+              Bubble Map
+            </TabsTrigger>
+            <TabsTrigger
+              value="charts"
+              className="data-[state=active]:bg-[#141415] data-[state=active]:text-white text-gray-400"
+            >
+              Charts
+            </TabsTrigger>
+            <TabsTrigger
+              value="mindmap"
+              className="data-[state=active]:bg-[#141415] data-[state=active]:text-white text-gray-400"
+            >
+              Mind Map
+            </TabsTrigger>
+            <TabsTrigger
+              value="fishbone"
+              className="data-[state=active]:bg-[#141415] data-[state=active]:text-white text-gray-400"
+            >
+              Fishbone
+            </TabsTrigger>
+            <TabsTrigger
+              value="sixhats"
+              className="data-[state=active]:bg-[#141415] data-[state=active]:text-white text-gray-400"
+            >
+              Six Hats
+            </TabsTrigger>
+            <TabsTrigger
+              value="swot"
+              className="data-[state=active]:bg-[#141415] data-[state=active]:text-white text-gray-400"
+            >
+              SWOT
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="bubblemap">
-          <Card className="bg-[#141415] border border-gray-700 mb-4">
-            <CardHeader>
-              <CardTitle className="text-white">Bubble Map</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={addBubble} className="space-y-4 mb-4">
-                <div>
-                  <Label htmlFor="newBubble" className="text-white">
-                    New Idea
-                  </Label>
-                  <Input
-                    id="newBubble"
-                    value={newBubble}
-                    onChange={(e) => setNewBubble(e.target.value)}
-                    className="bg-[#1A1A1B] border-gray-700 text-white"
-                    placeholder="Enter a new idea"
-                  />
-                </div>
-                <Button type="submit" className="w-full">
-                  Add Bubble
-                </Button>
-              </form>
-              <div className="flex flex-wrap gap-4">
-                {bubbles.map((bubble) => (
-                  <div
-                    key={bubble.id}
-                    className="bg-[#1A1A1B] p-4 rounded-full flex items-center justify-center relative"
-                  >
-                    <span>{bubble.text}</span>
-                    <Button
-                      variant="destructive"
-                      size="icon"
-                      className="absolute -top-2 -right-2"
-                      onClick={() => deleteBubble(bubble.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
+          <div className="w-full flex items-center my-8">
+            <div className="flex-grow border-t border-blue-900/30"></div>
+          </div>
+          <TabsContent value="bubblemap">
+            <Card className="bg-gradient-to-br from-[#181c24] to-[#101217] border border-blue-900/40 mb-8 shadow-2xl p-2 md:p-6 animate-fade-in-section">
+              <div className="flex items-center gap-2 mb-2">
+                <Info className="h-5 w-5 text-blue-300" aria-label="Visually map out your ideas and see connections." />
+                <span className="text-blue-200/80 text-sm">Bubble Map</span>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="charts">
-          <Card className="bg-[#141415] border border-gray-700 mb-4">
-            <CardHeader>
-              <CardTitle className="text-white">Charts</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={addChartItem} className="space-y-4 mb-4">
-                <div>
-                  <Label htmlFor="itemName" className="text-white">
-                    Item Name
-                  </Label>
-                  <Input
-                    id="itemName"
-                    value={newChartItem.name}
-                    onChange={(e) => setNewChartItem({ ...newChartItem, name: e.target.value })}
-                    className="bg-[#1A1A1B] border-gray-700 text-white"
-                    placeholder="Enter item name"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="itemValue" className="text-white">
-                    Item Value
-                  </Label>
-                  <Input
-                    id="itemValue"
-                    type="number"
-                    value={newChartItem.value}
-                    onChange={(e) => setNewChartItem({ ...newChartItem, value: Number(e.target.value) })}
-                    className="bg-[#1A1A1B] border-gray-700 text-white"
-                    placeholder="Enter item value"
-                  />
-                </div>
-                <Button type="submit" className="w-full">
-                  Add Chart Item
-                </Button>
-              </form>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <ChartCard title="Pie Chart">
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={chartData}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+              <CardHeader>
+                <CardTitle className="text-white text-3xl tracking-wide mb-4 font-extrabold drop-shadow-lg">Bubble Map</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={addBubble} className="flex flex-col md:flex-row md:items-end gap-4 mb-8">
+                  <div className="flex-1">
+                    <Label htmlFor="newBubble" className="text-white text-lg font-semibold mb-2 block">New Idea</Label>
+                    <Input
+                      id="newBubble"
+                      value={newBubble}
+                      onChange={(e) => setNewBubble(e.target.value)}
+                      className="bg-[#181c24] border-2 border-blue-700/40 text-white rounded-xl px-4 py-3 focus:border-blue-400 focus:ring-2 focus:ring-blue-500 transition-all text-lg shadow-inner"
+                      placeholder="Enter a new idea"
+                    />
+                  </div>
+                  <Button type="submit" className="bg-gradient-to-r from-green-400 to-blue-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg hover:from-green-500 hover:to-blue-600 transition-all text-lg mt-2 md:mt-0">
+                    Add Bubble
+                  </Button>
+                </form>
+                <div className="w-full min-h-[200px] flex items-center justify-center">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-8 w-full place-items-center">
+                    {bubbles.map((bubble) => (
+                      <div
+                        key={bubble.id}
+                        className="relative flex items-center justify-center animate-fade-in"
+                        style={{ animation: 'fadeIn 0.5s' }}
                       >
-                        {chartData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
-                </ChartCard>
-                <ChartCard title="Bar Chart">
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={chartData}>
-                      <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                      <YAxis
-                        stroke="#888888"
-                        fontSize={12}
-                        tickLine={false}
-                        axisLine={false}
-                        tickFormatter={(value) => `${value}`}
-                      />
-                      <Tooltip
-                        contentStyle={{ backgroundColor: "#1A1A1B", border: "none" }}
-                        labelStyle={{ color: "white" }}
-                      />
-                      <Bar dataKey="value" fill="#8884d8" radius={[4, 4, 0, 0]}>
-                        {chartData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </ChartCard>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="mindmap">
-          <Card className="bg-[#141415] border border-gray-700 mb-4">
-            <CardHeader>
-              <CardTitle className="text-white">Mind Map</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={addMindMapItem} className="space-y-4 mb-4">
-                <div>
-                  <Label htmlFor="newMindMapItem" className="text-white">
-                    New Idea
-                  </Label>
-                  <Input
-                    id="newMindMapItem"
-                    value={newMindMapItem}
-                    onChange={(e) => setNewMindMapItem(e.target.value)}
-                    className="bg-[#1A1A1B] border-gray-700 text-white"
-                    placeholder="Enter a new idea"
-                  />
-                </div>
-                <Button type="submit" className="w-full">
-                  Add to Mind Map
-                </Button>
-              </form>
-              <div className="mt-4">{renderMindMap(mindMap)}</div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="fishbone">
-          <Card className="bg-[#141415] border border-gray-700 mb-4">
-            <CardHeader>
-              <CardTitle className="text-white">Fishbone Diagram</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={addFishboneItem} className="space-y-4 mb-4">
-                <div>
-                  <Label htmlFor="fishboneCategory" className="text-white">
-                    Category
-                  </Label>
-                  <Input
-                    id="fishboneCategory"
-                    value={newFishboneItem.category}
-                    onChange={(e) => setNewFishboneItem({ ...newFishboneItem, category: e.target.value })}
-                    className="bg-[#1A1A1B] border-gray-700 text-white"
-                    placeholder="Enter category"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="fishboneCause" className="text-white">
-                    Cause
-                  </Label>
-                  <Input
-                    id="fishboneCause"
-                    value={newFishboneItem.cause}
-                    onChange={(e) => setNewFishboneItem({ ...newFishboneItem, cause: e.target.value })}
-                    className="bg-[#1A1A1B] border-gray-700 text-white"
-                    placeholder="Enter cause"
-                  />
-                </div>
-                <Button type="submit" className="w-full">
-                  Add Fishbone Item
-                </Button>
-              </form>
-              <div className="mt-4">
-                {fishboneItems.map((item) => (
-                  <div key={item.id} className="mb-2 p-2 bg-[#1A1A1B] rounded">
-                    <strong>{item.category}:</strong> {item.cause}
+                        <div
+                          className="bg-gradient-to-br from-green-500/90 to-blue-600/90 text-white flex items-center justify-center shadow-2xl text-2xl font-bold rounded-full min-w-[180px] min-h-[120px] max-w-[260px] px-8 py-8 transition-all duration-200 border-4 border-transparent hover:border-blue-400 hover:scale-105 hover:shadow-blue-400/30 text-center select-none"
+                        >
+                          <span className="w-full break-words leading-tight flex items-center justify-center h-full">{bubble.text}</span>
+                        </div>
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          className="absolute -top-3 -right-3 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity duration-200 bg-red-500/80 hover:bg-red-600/90 rounded-full p-1 shadow-md border-2 border-white"
+                          style={{ pointerEvents: 'auto' }}
+                          onClick={() => deleteBubble(bubble.id)}
+                          tabIndex={-1}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+                </div>
+                <style jsx>{`
+                  @keyframes fadeIn {
+                    from { opacity: 0; transform: scale(0.95); }
+                    to { opacity: 1; transform: scale(1); }
+                  }
+                `}</style>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        <TabsContent value="sixhats">
-          <Card className="bg-[#141415] border border-gray-700 mb-4">
-            <CardHeader>
-              <CardTitle className="text-white">Six Thinking Hats</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={addSixHatsThought} className="space-y-4 mb-4">
-                <div>
-                  <Label htmlFor="sixHatsColor" className="text-white">
-                    Hat Color
-                  </Label>
-                  <Select onValueChange={(value) => setNewSixHatsThought({ ...newSixHatsThought, hat: value })}>
-                    <SelectTrigger className="bg-[#1A1A1B] border-gray-700 text-white">
-                      <SelectValue placeholder="Select a hat color" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="white">White (Facts)</SelectItem>
-                      <SelectItem value="red">Red (Emotions)</SelectItem>
-                      <SelectItem value="black">Black (Caution)</SelectItem>
-                      <SelectItem value="yellow">Yellow (Benefits)</SelectItem>
-                      <SelectItem value="green">Green (Creativity)</SelectItem>
-                      <SelectItem value="blue">Blue (Process)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="sixHatsThought" className="text-white">
-                    Thought
-                  </Label>
-                  <Textarea
-                    id="sixHatsThought"
-                    value={newSixHatsThought.thought}
-                    onChange={(e) => setNewSixHatsThought({ ...newSixHatsThought, thought: e.target.value })}
-                    className="bg-[#1A1A1B] border-gray-700 text-white"
-                    placeholder="Enter your thought"
-                  />
-                </div>
-                <Button type="submit" className="w-full">
-                  Add Thought
-                </Button>
-              </form>
-              <div className="mt-4">
-                {sixHatsThoughts.map((thought) => (
-                  <div
-                    key={thought.id}
-                    className={`mb-2 p-2 rounded ${
-                      thought.hat === "white"
-                        ? "bg-gray-200 text-black"
-                        : thought.hat === "red"
-                          ? "bg-red-500"
-                          : thought.hat === "black"
-                            ? "bg-black"
-                            : thought.hat === "yellow"
-                              ? "bg-yellow-400 text-black"
-                              : thought.hat === "green"
-                                ? "bg-green-500"
-                                : "bg-blue-500"
-                    }`}
-                  >
-                    <strong>{thought.hat.charAt(0).toUpperCase() + thought.hat.slice(1)} Hat:</strong> {thought.thought}
-                  </div>
-                ))}
+          <div className="w-full flex items-center my-8">
+            <div className="flex-grow border-t border-blue-900/30"></div>
+          </div>
+          <TabsContent value="charts">
+            <Card className="bg-[#181c24] border border-blue-900/40 mb-8 shadow-xl p-2 md:p-6 animate-fade-in-section">
+              <div className="flex items-center gap-2 mb-2">
+                <Info className="h-5 w-5 text-blue-300" aria-label="Visualize your data with pie and bar charts." />
+                <span className="text-blue-200/80 text-sm">Charts</span>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+              <CardHeader>
+                <CardTitle className="text-white">Charts</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={addChartItem} className="space-y-4 mb-4">
+                  <div>
+                    <Label htmlFor="itemName" className="text-white">
+                      Item Name
+                    </Label>
+                    <Input
+                      id="itemName"
+                      value={newChartItem.name}
+                      onChange={(e) => setNewChartItem({ ...newChartItem, name: e.target.value })}
+                      className="bg-[#1A1A1B] border-gray-700 text-white"
+                      placeholder="Enter item name"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="itemValue" className="text-white">
+                      Item Value
+                    </Label>
+                    <Input
+                      id="itemValue"
+                      type="number"
+                      value={newChartItem.value}
+                      onChange={(e) => setNewChartItem({ ...newChartItem, value: Number(e.target.value) })}
+                      className="bg-[#1A1A1B] border-gray-700 text-white"
+                      placeholder="Enter item value"
+                    />
+                  </div>
+                  <Button type="submit" className="w-full">
+                    Add Chart Item
+                  </Button>
+                </form>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <ChartCard title="Pie Chart">
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie
+                          data={chartData}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                        >
+                          {chartData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </ChartCard>
+                  <ChartCard title="Bar Chart">
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={chartData}>
+                        <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                        <YAxis
+                          stroke="#888888"
+                          fontSize={12}
+                          tickLine={false}
+                          axisLine={false}
+                          tickFormatter={(value) => `${value}`}
+                        />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: "#1A1A1B", border: "none" }}
+                          labelStyle={{ color: "white" }}
+                        />
+                        <Bar dataKey="value" fill="#8884d8" radius={[4, 4, 0, 0]}>
+                          {chartData.map((entry, index) => (
+                            <Cell key={`cell-bar-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </ChartCard>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        <TabsContent value="swot">
-          <Card className="bg-[#141415] border border-gray-700 mb-4">
-            <CardHeader>
-              <CardTitle className="text-white">SWOT Analysis</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={addSwotItem} className="space-y-4 mb-4">
-                <div>
-                  <Label htmlFor="swotCategory" className="text-white">
-                    Category
-                  </Label>
-                  <Select
-                    onValueChange={(value: "strengths" | "weaknesses" | "opportunities" | "threats") =>
-                      setNewSwotItem({ ...newSwotItem, category: value })
-                    }
-                  >
-                    <SelectTrigger className="bg-[#1A1A1B] border-gray-700 text-white">
-                      <SelectValue placeholder="Select a category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="strengths">Strengths</SelectItem>
-                      <SelectItem value="weaknesses">Weaknesses</SelectItem>
-                      <SelectItem value="opportunities">Opportunities</SelectItem>
-                      <SelectItem value="threats">Threats</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="swotText" className="text-white">
-                    Item
-                  </Label>
-                  <Input
-                    id="swotText"
-                    value={newSwotItem.text}
-                    onChange={(e) => setNewSwotItem({ ...newSwotItem, text: e.target.value })}
-                    className="bg-[#1A1A1B] border-gray-700 text-white"
-                    placeholder="Enter SWOT item"
-                  />
-                </div>
-                <Button type="submit" className="w-full">
-                  Add SWOT Item
-                </Button>
-              </form>
-              <div className="mt-4 grid grid-cols-2 gap-4">
-                {(["strengths", "weaknesses", "opportunities", "threats"] as const).map((category) => (
-                  <div
-                    key={category}
-                    className={`p-2 rounded ${
-                      category === "strengths"
-                        ? "bg-green-700"
-                        : category === "weaknesses"
-                          ? "bg-red-700"
-                          : category === "opportunities"
-                            ? "bg-blue-700"
-                            : "bg-yellow-700"
-                    }`}
-                  >
-                    <h3 className="font-bold mb-2">{category.charAt(0).toUpperCase() + category.slice(1)}</h3>
-                    <ul className="list-disc list-inside">
-                      {swotItems
-                        .filter((item) => item.category === category)
-                        .map((item) => (
-                          <li key={item.id}>{item.text}</li>
-                        ))}
-                    </ul>
-                  </div>
-                ))}
+          <div className="w-full flex items-center my-8">
+            <div className="flex-grow border-t border-blue-900/30"></div>
+          </div>
+          <TabsContent value="mindmap">
+            <Card className="bg-[#181c24] border border-blue-900/40 mb-8 shadow-xl p-2 md:p-6 animate-fade-in-section">
+              <div className="flex items-center gap-2 mb-2">
+                <Info className="h-5 w-5 text-blue-300" aria-label="Branch out your ideas in a mind map structure." />
+                <span className="text-blue-200/80 text-sm">Mind Map</span>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+              <CardHeader>
+                <CardTitle className="text-white">Mind Map</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {renderMindMap(mindMap)}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <div className="w-full flex items-center my-8">
+            <div className="flex-grow border-t border-blue-900/30"></div>
+          </div>
+          <TabsContent value="fishbone">
+            <Card className="bg-[#181c24] border border-blue-900/40 mb-8 shadow-xl p-2 md:p-6 animate-fade-in-section">
+              <div className="flex items-center gap-2 mb-2">
+                <Info className="h-5 w-5 text-blue-300" aria-label="Analyze causes and effects with a fishbone diagram." />
+                <span className="text-blue-200/80 text-sm">Fishbone</span>
+              </div>
+              <CardHeader>
+                <CardTitle className="text-white">Fishbone</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {/* Fishbone content */}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <div className="w-full flex items-center my-8">
+            <div className="flex-grow border-t border-blue-900/30"></div>
+          </div>
+          <TabsContent value="sixhats">
+            <Card className="bg-[#181c24] border border-blue-900/40 mb-8 shadow-xl p-2 md:p-6 animate-fade-in-section">
+              <div className="flex items-center gap-2 mb-2">
+                <Info className="h-5 w-5 text-blue-300" aria-label="Explore perspectives with the Six Thinking Hats method." />
+                <span className="text-blue-200/80 text-sm">Six Hats</span>
+              </div>
+              <CardHeader>
+                <CardTitle className="text-white">Six Hats</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {/* Six Hats content */}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <div className="w-full flex items-center my-8">
+            <div className="flex-grow border-t border-blue-900/30"></div>
+          </div>
+          <TabsContent value="swot">
+            <Card className="bg-[#181c24] border border-blue-900/40 mb-8 shadow-xl p-2 md:p-6 animate-fade-in-section">
+              <div className="flex items-center gap-2 mb-2">
+                <Info className="h-5 w-5 text-blue-300" aria-label="Identify strengths, weaknesses, opportunities, and threats." />
+                <span className="text-blue-200/80 text-sm">SWOT</span>
+              </div>
+              <CardHeader>
+                <CardTitle className="text-white">SWOT</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {/* SWOT content */}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   )
 }
-

@@ -1,123 +1,128 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Clock, Play, Square } from "lucide-react"
 import Link from "next/link"
 import { format, differenceInSeconds } from "date-fns"
+import { supabase } from "@/lib/supabaseClient"
 
 type WorkSession = {
-  id: number
-  startTime: string
-  endTime: string | null
-  duration: number | null
+  id: string
+  user_id: string
+  clock_in: string
+  clock_out: string | null
+  created_at: string
 }
-
-const mockWorkSessions: WorkSession[] = [
-  {
-    id: 1,
-    startTime: "2024-03-15T09:00:00.000Z",
-    endTime: "2024-03-15T17:00:00.000Z",
-    duration: 28800, // 8 hours
-  },
-  {
-    id: 2,
-    startTime: "2024-03-16T09:30:00.000Z",
-    endTime: "2024-03-16T18:00:00.000Z",
-    duration: 30600, // 8.5 hours
-  },
-  {
-    id: 3,
-    startTime: "2024-03-17T10:00:00.000Z",
-    endTime: "2024-03-17T16:30:00.000Z",
-    duration: 23400, // 6.5 hours
-  },
-  {
-    id: 4,
-    startTime: "2024-03-18T08:45:00.000Z",
-    endTime: "2024-03-18T17:15:00.000Z",
-    duration: 30600, // 8.5 hours
-  },
-  {
-    id: 5,
-    startTime: "2024-03-19T09:15:00.000Z",
-    endTime: "2024-03-19T17:45:00.000Z",
-    duration: 30600, // 8.5 hours
-  },
-]
 
 export default function WorkClockPage() {
   const [isClockingIn, setIsClockingIn] = useState(false)
   const [currentSession, setCurrentSession] = useState<WorkSession | null>(null)
   const [workSessions, setWorkSessions] = useState<WorkSession[]>([])
   const [elapsedTime, setElapsedTime] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    const storedSessions = localStorage.getItem("workSessions")
-    if (storedSessions) {
-      setWorkSessions(JSON.parse(storedSessions))
-    } else {
-      setWorkSessions(mockWorkSessions)
+    const fetchSessions = async () => {
+      setLoading(true)
+      setError(null)
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        setError("You must be logged in to view work sessions.")
+        setLoading(false)
+        return
+      }
+      setUserId(user.id)
+      const { data, error: fetchError } = await supabase
+        .from("work_clock")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("clock_in", { ascending: false })
+      if (fetchError) {
+        setError("Failed to fetch work sessions.")
+      } else {
+        setWorkSessions(data || [])
+        // Find any open session
+        const openSession = (data || []).find((s: WorkSession) => !s.clock_out)
+        if (openSession) {
+          setCurrentSession(openSession)
+          setIsClockingIn(true)
+          const startTime = new Date(openSession.clock_in).getTime()
+          const now = new Date().getTime()
+          setElapsedTime(Math.floor((now - startTime) / 1000))
+        }
+      }
+      setLoading(false)
     }
-
-    const lastSession = JSON.parse(localStorage.getItem("currentSession") || "null")
-    if (lastSession && !lastSession.endTime) {
-      setCurrentSession(lastSession)
-      setIsClockingIn(true)
-      const startTime = new Date(lastSession.startTime).getTime()
-      const now = new Date().getTime()
-      setElapsedTime(Math.floor((now - startTime) / 1000))
-    }
+    fetchSessions()
+    // eslint-disable-next-line
   }, [])
 
   useEffect(() => {
-    let interval: NodeJS.Timeout
-    if (isClockingIn) {
-      interval = setInterval(() => {
-        setElapsedTime((prevTime) => prevTime + 1)
+    if (isClockingIn && currentSession) {
+      intervalRef.current = setInterval(() => {
+        const startTime = new Date(currentSession.clock_in).getTime()
+        const now = new Date().getTime()
+        setElapsedTime(Math.floor((now - startTime) / 1000))
       }, 1000)
-    }
-    return () => clearInterval(interval)
-  }, [isClockingIn])
-
-  useEffect(() => {
-    localStorage.setItem("workSessions", JSON.stringify(workSessions))
-  }, [workSessions])
-
-  useEffect(() => {
-    if (currentSession) {
-      localStorage.setItem("currentSession", JSON.stringify(currentSession))
     } else {
-      localStorage.removeItem("currentSession")
+      if (intervalRef.current) clearInterval(intervalRef.current)
     }
-  }, [currentSession])
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+  }, [isClockingIn, currentSession])
 
-  const handleClockIn = () => {
-    const newSession: WorkSession = {
-      id: Date.now(),
-      startTime: new Date().toISOString(),
-      endTime: null,
-      duration: null,
+  const handleClockIn = async () => {
+    setError(null)
+    if (!userId) {
+      setError("You must be logged in to clock in.")
+      return
     }
-    setCurrentSession(newSession)
-    setIsClockingIn(true)
-    setElapsedTime(0)
+    setLoading(true)
+    const now = new Date().toISOString()
+    const { data, error: insertError } = await supabase
+      .from("work_clock")
+      .insert([
+        {
+          user_id: userId,
+          clock_in: now,
+        },
+      ])
+      .select()
+    if (insertError) {
+      setError(insertError.message || "Failed to clock in.")
+    } else if (data && data.length > 0) {
+      setCurrentSession(data[0])
+      setIsClockingIn(true)
+      setElapsedTime(0)
+    }
+    setLoading(false)
   }
 
-  const handleClockOut = () => {
-    if (currentSession) {
-      const endTime = new Date().toISOString()
-      const updatedSession = {
-        ...currentSession,
-        endTime,
-        duration: differenceInSeconds(new Date(endTime), new Date(currentSession.startTime)),
-      }
-      setWorkSessions([...workSessions, updatedSession])
+  const handleClockOut = async () => {
+    if (!currentSession) return
+    setError(null)
+    setLoading(true)
+    const now = new Date().toISOString()
+    const { data, error: updateError } = await supabase
+      .from("work_clock")
+      .update({ clock_out: now })
+      .eq("id", currentSession.id)
+      .select()
+    if (updateError) {
+      setError(updateError.message || "Failed to clock out.")
+    } else if (data && data.length > 0) {
+      setWorkSessions((prev) => [data[0], ...prev.filter((s) => s.id !== currentSession.id)])
       setCurrentSession(null)
       setIsClockingIn(false)
       setElapsedTime(0)
     }
+    setLoading(false)
   }
 
   const formatTime = (seconds: number) => {
@@ -131,7 +136,10 @@ export default function WorkClockPage() {
 
   const getTotalHours = () => {
     const totalSeconds = workSessions.reduce((total, session) => {
-      return total + (session.duration || 0)
+      if (session.clock_in && session.clock_out) {
+        return total + differenceInSeconds(new Date(session.clock_out), new Date(session.clock_in))
+      }
+      return total
     }, 0)
     return (totalSeconds / 3600).toFixed(2)
   }
@@ -181,24 +189,31 @@ export default function WorkClockPage() {
             <p>No work sessions recorded yet.</p>
           ) : (
             <ul className="space-y-2">
-              {workSessions.map((session) => (
-                <li key={session.id} className="flex justify-between items-center bg-[#1A1A1B] p-2 rounded">
-                  <div>
-                    <p className="font-semibold">{format(new Date(session.startTime), "MMM d, yyyy")}</p>
-                    <p className="text-sm text-white">
-                      {format(new Date(session.startTime), "HH:mm")} -{" "}
-                      {session.endTime ? format(new Date(session.endTime), "HH:mm") : "In Progress"}
+              {workSessions.map((session) => {
+                const duration = session.clock_in && session.clock_out
+                  ? differenceInSeconds(new Date(session.clock_out), new Date(session.clock_in))
+                  : null
+                return (
+                  <li key={session.id} className="flex justify-between items-center bg-[#1A1A1B] p-2 rounded">
+                    <div>
+                      <p className="font-semibold">{format(new Date(session.clock_in), "MMM d, yyyy")}</p>
+                      <p className="text-sm text-white">
+                        {format(new Date(session.clock_in), "HH:mm")} -{" "}
+                        {session.clock_out ? format(new Date(session.clock_out), "HH:mm") : "In Progress"}
+                      </p>
+                    </div>
+                    <p className="font-bold">
+                      {duration ? `${(duration / 3600).toFixed(2)} hours` : "In Progress"}
                     </p>
-                  </div>
-                  <p className="font-bold">
-                    {session.duration ? `${(session.duration / 3600).toFixed(2)} hours` : "In Progress"}
-                  </p>
-                </li>
-              ))}
+                  </li>
+                )
+              })}
             </ul>
           )}
         </CardContent>
       </Card>
+      {error && <div className="bg-red-900 text-red-200 p-2 mb-4 rounded">{error}</div>}
+      {loading && <div className="text-blue-300 mb-2">Loading...</div>}
     </div>
   )
 }

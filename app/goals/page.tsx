@@ -9,112 +9,111 @@ import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ArrowLeft, Trash2, Target } from "lucide-react"
 import Link from "next/link"
+import { supabase } from "@/lib/supabaseClient"
 
 type Goal = {
-  id: number
-  text: string
-  completed: boolean
+  id: string
+  user_id: string
+  title: string
+  description: string | null
+  target_date: string | null
+  achieved: boolean
+  created_at: string
 }
-
-const mockGoals: Goal[] = [
-  {
-    id: 1,
-    text: "Complete the weekly task manager project",
-    completed: false,
-  },
-  {
-    id: 2,
-    text: "Learn and implement TypeScript in all components",
-    completed: false,
-  },
-  {
-    id: 3,
-    text: "Improve code documentation and add comments",
-    completed: true,
-  },
-  {
-    id: 4,
-    text: "Set up automated testing for the application",
-    completed: false,
-  },
-  {
-    id: 5,
-    text: "Optimize application performance",
-    completed: false,
-  },
-  {
-    id: 6,
-    text: "Implement user authentication system",
-    completed: false,
-  },
-  {
-    id: 7,
-    text: "Add dark/light theme toggle",
-    completed: true,
-  },
-  {
-    id: 8,
-    text: "Create comprehensive user documentation",
-    completed: false,
-  },
-  {
-    id: 9,
-    text: "Set up CI/CD pipeline",
-    completed: false,
-  },
-  {
-    id: 10,
-    text: "Conduct user testing and gather feedback",
-    completed: false,
-  }
-]
 
 export default function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([])
-  const [newGoal, setNewGoal] = useState("")
+  const [newGoal, setNewGoal] = useState({ title: "", description: "", target_date: "" })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    // Clear local storage for testing
-    localStorage.removeItem("goals")
-    
-    const storedGoals = localStorage.getItem("goals")
-    if (storedGoals) {
-      const parsedGoals = JSON.parse(storedGoals)
-      if (Array.isArray(parsedGoals) && parsedGoals.length > 0) {
-        setGoals(parsedGoals)
-      } else {
-        setGoals(mockGoals)
+    const fetchGoals = async () => {
+      setLoading(true)
+      setError(null)
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        setError("You must be logged in to view goals.")
+        setLoading(false)
+        return
       }
-    } else {
-      setGoals(mockGoals)
+      setUserId(user.id)
+      const { data, error: fetchError } = await supabase
+        .from("goals")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true })
+      if (fetchError) {
+        setError("Failed to fetch goals.")
+      } else {
+        setGoals(data || [])
+      }
+      setLoading(false)
     }
+    fetchGoals()
   }, [])
 
-  useEffect(() => {
-    if (goals.length > 0) {
-      localStorage.setItem("goals", JSON.stringify(goals))
-    }
-  }, [goals])
-
-  const addGoal = (e: React.FormEvent) => {
+  const addGoal = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (newGoal.trim()) {
-      const newGoalItem: Goal = {
-        id: Date.now(),
-        text: newGoal.trim(),
-        completed: false,
+    setError(null)
+    if (!userId) {
+      setError("You must be logged in to add goals.")
+      return
+    }
+    if (newGoal.title.trim()) {
+      setLoading(true)
+      const { data, error: insertError } = await supabase
+        .from("goals")
+        .insert([
+          {
+            user_id: userId,
+            title: newGoal.title.trim(),
+            description: newGoal.description || null,
+            target_date: newGoal.target_date || null,
+            achieved: false,
+          },
+        ])
+        .select()
+      if (insertError) {
+        setError(insertError.message || "Failed to add goal. Please try again.")
+      } else if (data && data.length > 0) {
+        setGoals((prev) => [...prev, data[0]])
+        setNewGoal({ title: "", description: "", target_date: "" })
       }
-      setGoals((prevGoals) => [...prevGoals, newGoalItem])
-      setNewGoal("")
+      setLoading(false)
     }
   }
 
-  const toggleGoal = (id: number) => {
-    setGoals((prevGoals) => prevGoals.map((goal) => (goal.id === id ? { ...goal, completed: !goal.completed } : goal)))
+  const toggleGoal = async (id: string, achieved: boolean) => {
+    setError(null)
+    setLoading(true)
+    const { data, error: updateError } = await supabase
+      .from("goals")
+      .update({ achieved: !achieved })
+      .eq("id", id)
+      .select()
+    if (updateError) {
+      setError(updateError.message || "Failed to update goal.")
+    } else if (data && data.length > 0) {
+      setGoals((prev) => prev.map((g) => g.id === id ? data[0] : g))
+    }
+    setLoading(false)
   }
 
-  const deleteGoal = (id: number) => {
-    setGoals((prevGoals) => prevGoals.filter((goal) => goal.id !== id))
+  const deleteGoal = async (id: string) => {
+    setError(null)
+    setLoading(true)
+    const { error: deleteError } = await supabase
+      .from("goals")
+      .delete()
+      .eq("id", id)
+    if (deleteError) {
+      setError(deleteError.message || "Failed to delete goal.")
+    } else {
+      setGoals((prev) => prev.filter((g) => g.id !== id))
+    }
+    setLoading(false)
   }
 
   return (
@@ -128,18 +127,33 @@ export default function GoalsPage() {
           <CardTitle className="text-white">Add New Goal</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={addGoal} className="flex space-x-2">
+          <form onSubmit={addGoal} className="flex flex-col md:flex-row md:space-x-2 space-y-2 md:space-y-0">
             <Input
               type="text"
-              value={newGoal}
-              onChange={(e) => setNewGoal(e.target.value)}
-              placeholder="Enter a new goal"
+              value={newGoal.title}
+              onChange={(e) => setNewGoal({ ...newGoal, title: e.target.value })}
+              placeholder="Goal title (required)"
+              className="flex-grow bg-[#1A1A1B] border-gray-700 text-white placeholder-gray-400"
+              required
+            />
+            <Input
+              type="text"
+              value={newGoal.description}
+              onChange={(e) => setNewGoal({ ...newGoal, description: e.target.value })}
+              placeholder="Description (optional)"
               className="flex-grow bg-[#1A1A1B] border-gray-700 text-white placeholder-gray-400"
             />
-            <Button type="submit" className="text-white">
-              Add
+            <Input
+              type="date"
+              value={newGoal.target_date}
+              onChange={(e) => setNewGoal({ ...newGoal, target_date: e.target.value })}
+              className="flex-grow bg-[#1A1A1B] border-gray-700 text-white placeholder-gray-400"
+            />
+            <Button type="submit" className="text-white" disabled={loading}>
+              {loading ? "Adding..." : "Add"}
             </Button>
           </form>
+          {error && <p className="text-red-400 mt-2">{error}</p>}
         </CardContent>
       </Card>
       <Card className="bg-[#141415] border border-gray-700">
@@ -147,24 +161,35 @@ export default function GoalsPage() {
           <CardTitle className="text-white">Your Goals</CardTitle>
         </CardHeader>
         <CardContent>
-          {goals.length === 0 ? (
+          {loading ? (
+            <p className="text-white">Loading...</p>
+          ) : goals.length === 0 ? (
             <p className="text-white">No goals yet. Add some above!</p>
           ) : (
             <ul className="space-y-2">
               {goals.map((goal) => (
                 <li key={goal.id} className="flex items-center justify-between bg-[#1A1A1B] p-2 rounded">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      checked={goal.completed}
-                      onCheckedChange={() => toggleGoal(goal.id)}
-                      className="border-gray-400"
-                    />
-                    <span
-                      className={`flex items-center ${goal.completed ? "line-through text-gray-500" : "text-white"}`}
-                    >
-                      <Target className="h-4 w-4 text-red-400 mr-2" />
-                      {goal.text}
-                    </span>
+                  <div className="flex flex-col md:flex-row md:items-center md:space-x-4 w-full">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        checked={goal.achieved}
+                        onCheckedChange={() => toggleGoal(goal.id, goal.achieved)}
+                        className="border-gray-400"
+                      />
+                      <span
+                        className={`flex items-center ${goal.achieved ? "line-through text-gray-500" : "text-white"}`}
+                      >
+                        <Target className="h-4 w-4 text-red-400 mr-2" />
+                        {goal.title}
+                      </span>
+                    </div>
+                    {goal.description && (
+                      <span className="text-gray-400 text-sm mt-1 md:mt-0">{goal.description}</span>
+                    )}
+                    {goal.target_date && (
+                      <span className="text-blue-300 text-xs mt-1 md:mt-0">Target: {goal.target_date}</span>
+                    )}
+                    <span className="text-gray-500 text-xs mt-1 md:mt-0">Created: {goal.created_at?.slice(0, 10)}</span>
                   </div>
                   <Button
                     variant="ghost"

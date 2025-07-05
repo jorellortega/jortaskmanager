@@ -9,46 +9,85 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft, Edit, Save } from "lucide-react"
+import { ArrowLeft, Edit, Save, Plus } from "lucide-react"
 import Link from "next/link"
+import { supabase } from "@/lib/supabaseClient"
 
 type Routine = {
-  id: number
-  name: string
-  completed: boolean
+  id: string
+  user_id: string
+  title: string
+  description: string | null
   frequency: "daily" | "weekly" | "monthly" | "yearly"
+  completed: boolean
+  created_at?: string
 }
 
 export default function RoutinesPage() {
-  const [routines, setRoutines] = useState<Routine[]>([
-    { id: 1, name: "Morning Workout", completed: false, frequency: "daily" },
-    { id: 2, name: "Read a Book", completed: false, frequency: "weekly" },
-    { id: 3, name: "Family Game Night", completed: false, frequency: "weekly" },
-    { id: 4, name: "Deep House Cleaning", completed: false, frequency: "monthly" },
-  ])
-  const [newRoutine, setNewRoutine] = useState({ name: "", frequency: "daily" as const })
+  const [routines, setRoutines] = useState<Routine[]>([])
+  const [newRoutine, setNewRoutine] = useState<{ title: string; description: string; frequency: "daily" | "weekly" | "monthly" | "yearly" }>({ title: "", description: "", frequency: "daily" })
   const [isExpanded, setIsExpanded] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [editedRoutine, setEditedRoutine] = useState<Routine | null>(null)
   const [activeFrequency, setActiveFrequency] = useState<"daily" | "weekly" | "monthly" | "yearly">("daily")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    const storedRoutines = localStorage.getItem("routines")
-    if (storedRoutines) {
-      setRoutines(JSON.parse(storedRoutines))
+    const fetchRoutines = async () => {
+      setLoading(true)
+      setError(null)
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        setError("You must be logged in to view routines.")
+        setLoading(false)
+        return
+      }
+      setUserId(user.id)
+      const { data, error: fetchError } = await supabase
+        .from("routines")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true })
+      if (fetchError) {
+        setError("Failed to fetch routines.")
+      } else {
+        setRoutines(data || [])
+      }
+      setLoading(false)
     }
+    fetchRoutines()
   }, [])
 
-  useEffect(() => {
-    localStorage.setItem("routines", JSON.stringify(routines))
-  }, [routines])
-
-  const addRoutine = (e: React.FormEvent) => {
+  const addRoutine = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (newRoutine.name) {
-      const updatedRoutines = [...routines, { id: Date.now(), ...newRoutine, completed: false }]
-      setRoutines(updatedRoutines)
-      setNewRoutine({ name: "", frequency: "daily" })
+    setError(null)
+    if (!userId) {
+      setError("You must be logged in to add routines.")
+      return
+    }
+    if (newRoutine.title) {
+      setLoading(true)
+      const { data, error: insertError } = await supabase
+        .from("routines")
+        .insert([
+          {
+            user_id: userId,
+            title: newRoutine.title,
+            description: newRoutine.description,
+            frequency: newRoutine.frequency,
+            completed: false,
+          },
+        ])
+        .select()
+      if (insertError) {
+        setError(insertError.message || "Failed to add routine. Please try again.")
+      } else if (data && data.length > 0) {
+        setRoutines((prev) => [...prev, data[0]])
+        setNewRoutine({ title: "", description: "", frequency: "daily" })
+      }
+      setLoading(false)
     }
   }
 
@@ -57,18 +96,43 @@ export default function RoutinesPage() {
     setEditedRoutine(routine)
   }
 
-  const handleSave = () => {
-    if (editedRoutine) {
-      setRoutines((prevRoutines) => prevRoutines.map((r) => (r.id === editedRoutine.id ? editedRoutine : r)))
+  const handleSave = async () => {
+    if (!editedRoutine) return
+    setError(null)
+    setLoading(true)
+    const { data, error: updateError } = await supabase
+      .from("routines")
+      .update({
+        title: editedRoutine.title,
+        description: editedRoutine.description,
+        frequency: editedRoutine.frequency,
+      })
+      .eq("id", editedRoutine.id)
+      .select()
+    if (updateError) {
+      setError(updateError.message || "Failed to update routine.")
+    } else if (data && data.length > 0) {
+      setRoutines((prev) => prev.map((r) => r.id === editedRoutine.id ? data[0] : r))
       setEditingId(null)
       setEditedRoutine(null)
     }
+    setLoading(false)
   }
 
-  const toggleRoutineCompletion = (id: number) => {
-    setRoutines((prevRoutines) =>
-      prevRoutines.map((routine) => (routine.id === id ? { ...routine, completed: !routine.completed } : routine)),
-    )
+  const toggleRoutineCompletion = async (id: string, completed: boolean) => {
+    setError(null)
+    setLoading(true)
+    const { data, error: updateError } = await supabase
+      .from("routines")
+      .update({ completed: !completed })
+      .eq("id", id)
+      .select()
+    if (updateError) {
+      setError(updateError.message || "Failed to update routine.")
+    } else if (data && data.length > 0) {
+      setRoutines((prev) => prev.map((r) => r.id === id ? data[0] : r))
+    }
+    setLoading(false)
   }
 
   const filteredRoutines = routines.filter((routine) => routine.frequency === activeFrequency)
@@ -83,26 +147,40 @@ export default function RoutinesPage() {
         className={`bg-[#141415] border border-gray-700 mb-4 text-white transition-all duration-300 ease-in-out cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 ${
           isExpanded ? "p-4" : "p-2"
         }`}
-        onClick={() => setIsExpanded(!isExpanded)}
         aria-expanded={isExpanded}
         tabIndex={0}
       >
-        <CardHeader className={`flex justify-center items-center ${isExpanded ? "" : "h-16"}`}>
+        <CardHeader
+          className={`flex justify-center items-center ${isExpanded ? "" : "h-16"} cursor-pointer`}
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
           {isExpanded ? (
             <CardTitle>Add New Routine</CardTitle>
           ) : (
-            <CardTitle className="text-2xl font-bold">ROUTINES</CardTitle>
+            <div className="flex items-center justify-center w-full group">
+              <CardTitle className="text-2xl font-bold mr-2">ROUTINES</CardTitle>
+              <Plus className="h-8 w-8 text-green-400 opacity-0 scale-75 transition-all duration-200 group-hover:opacity-100 group-hover:scale-125 group-hover:text-green-300" />
+            </div>
           )}
         </CardHeader>
         {isExpanded && (
           <CardContent>
             <form onSubmit={addRoutine} className="space-y-4">
               <div>
-                <Label htmlFor="name">Routine Name</Label>
+                <Label htmlFor="title">Routine Title</Label>
                 <Input
-                  id="name"
-                  value={newRoutine.name}
-                  onChange={(e) => setNewRoutine({ ...newRoutine, name: e.target.value })}
+                  id="title"
+                  value={newRoutine.title}
+                  onChange={(e) => setNewRoutine({ ...newRoutine, title: e.target.value })}
+                  className="bg-[#1A1A1B] border-gray-700 text-white"
+                />
+              </div>
+              <div>
+                <Label htmlFor="description">Description</Label>
+                <Input
+                  id="description"
+                  value={newRoutine.description || ""}
+                  onChange={(e) => setNewRoutine({ ...newRoutine, description: e.target.value }) }
                   className="bg-[#1A1A1B] border-gray-700 text-white"
                 />
               </div>
@@ -171,11 +249,11 @@ export default function RoutinesPage() {
               <li
                 key={routine.id}
                 className="bg-[#1A1A1B] p-2 rounded flex items-center text-white transition-opacity duration-200"
-                aria-label={`${routine.name}${routine.completed ? " (completed)" : ""}`}
+                aria-label={`${routine.title}${routine.completed ? " (completed)" : ""}`}
               >
                 <Checkbox
                   checked={routine.completed}
-                  onCheckedChange={() => toggleRoutineCompletion(routine.id)}
+                  onCheckedChange={() => toggleRoutineCompletion(routine.id, routine.completed)}
                   className={`mr-2 transition-all duration-200 border-2 ${
                     routine.completed ? "border-transparent opacity-10" : "border-white"
                   }`}
@@ -184,8 +262,8 @@ export default function RoutinesPage() {
                 {editingId === routine.id ? (
                   <>
                     <Input
-                      value={editedRoutine?.name || ""}
-                      onChange={(e) => setEditedRoutine({ ...editedRoutine!, name: e.target.value })}
+                      value={editedRoutine?.title || ""}
+                      onChange={(e) => setEditedRoutine({ ...editedRoutine!, title: e.target.value })}
                       className="bg-[#2A2A2B] border-gray-700 text-white mr-2"
                     />
                     <Button onClick={handleSave} size="sm" className="p-1">
@@ -195,15 +273,8 @@ export default function RoutinesPage() {
                 ) : (
                   <>
                     <span className={`flex-grow ${routine.completed ? "opacity-10" : ""}`}>
-                      <strong>{routine.name}</strong>
+                      <strong>{routine.title}</strong>
                     </span>
-                    <Button
-                      onClick={() => handleEdit(routine)}
-                      size="sm"
-                      className="p-1 text-gray-600 hover:text-white transition-colors duration-200"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
                   </>
                 )}
               </li>

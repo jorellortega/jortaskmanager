@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Users, X, Check, Clock, Calendar, Pause, Play, Ban, Link2Off } from "lucide-react"
@@ -13,103 +13,104 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
+import { supabase } from "@/lib/supabaseClient"
 
-type PeerStatus = "online" | "offline" | "paused" | "blocked"
-
-type SyncedPeer = {
+type Peer = {
   id: string
-  name: string
-  lastSynced: Date
-  activeFeatures: string[]
-  status: PeerStatus
-  avatar: string
-  syncState: "active" | "paused" | "blocked"
+  user_id: string
+  peer_user_id: string
+  status: string
+  sync_state: string
+  last_synced: string | null
+  active_features: string[] | null
+  created_at: string
 }
 
-const mockPeers: SyncedPeer[] = [
-  {
-    id: "1",
-    name: "Sarah Johnson",
-    lastSynced: new Date(2024, 2, 15, 14, 30),
-    activeFeatures: ["Calendar", "Tasks", "Goals"],
-    status: "online",
-    avatar: "SJ",
-    syncState: "active"
-  },
-  {
-    id: "2",
-    name: "Mike Chen",
-    lastSynced: new Date(2024, 2, 14, 9, 45),
-    activeFeatures: ["Calendar", "Fitness", "Meal Planning"],
-    status: "offline",
-    avatar: "MC",
-    syncState: "paused"
-  },
-  {
-    id: "3",
-    name: "Emma Davis",
-    lastSynced: new Date(2024, 2, 15, 11, 20),
-    activeFeatures: ["Goals", "Tasks", "Notes"],
-    status: "online",
-    avatar: "ED",
-    syncState: "active"
-  }
-]
-
 export default function SyncedPeersPage() {
-  const [peers, setPeers] = useState<SyncedPeer[]>(mockPeers)
-  const [selectedPeer, setSelectedPeer] = useState<SyncedPeer | null>(null)
+  const [peers, setPeers] = useState<Peer[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
+  const [selectedPeer, setSelectedPeer] = useState<Peer | null>(null)
   const [showBlockDialog, setShowBlockDialog] = useState(false)
 
-  const removePeer = (id: string) => {
-    setPeers(prev => prev.filter(peer => peer.id !== id))
+  useEffect(() => {
+    const fetchPeers = async () => {
+      setLoading(true)
+      setError(null)
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        setError("You must be logged in to view peers.")
+        setLoading(false)
+        return
+      }
+      setUserId(user.id)
+      const { data, error: fetchError } = await supabase
+        .from("peers")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+      if (fetchError) {
+        setError("Failed to fetch peers.")
+      } else {
+        setPeers(data || [])
+      }
+      setLoading(false)
+    }
+    fetchPeers()
+    // eslint-disable-next-line
+  }, [])
+
+  const updatePeer = async (id: string, updates: Partial<Peer>) => {
+    setLoading(true)
+    setError(null)
+    const { data, error: updateError } = await supabase
+      .from("peers")
+      .update(updates)
+      .eq("id", id)
+      .select()
+    if (updateError) {
+      setError(updateError.message || "Failed to update peer.")
+    } else if (data && data.length > 0) {
+      setPeers((prev) => prev.map((peer) => peer.id === id ? data[0] : peer))
+    }
+    setLoading(false)
   }
 
-  const syncWithPeer = (id: string) => {
-    setPeers(prev =>
-      prev.map(peer =>
-        peer.id === id
-          ? { ...peer, lastSynced: new Date() }
-          : peer
-      )
-    )
+  const removePeer = async (id: string) => {
+    setLoading(true)
+    setError(null)
+    const { error: deleteError } = await supabase
+      .from("peers")
+      .delete()
+      .eq("id", id)
+    if (deleteError) {
+      setError(deleteError.message || "Failed to remove peer.")
+    } else {
+      setPeers((prev) => prev.filter((peer) => peer.id !== id))
+    }
+    setLoading(false)
   }
 
-  const togglePauseSync = (id: string) => {
-    setPeers(prev =>
-      prev.map(peer =>
-        peer.id === id
-          ? { 
-              ...peer, 
-              syncState: peer.syncState === "paused" ? "active" : "paused",
-              status: peer.syncState === "paused" ? "online" : "paused"
-            }
-          : peer
-      )
-    )
+  const syncWithPeer = async (id: string) => {
+    await updatePeer(id, { last_synced: new Date().toISOString() })
   }
 
-  const blockPeer = (id: string) => {
-    setPeers(prev =>
-      prev.map(peer =>
-        peer.id === id
-          ? { ...peer, syncState: "blocked", status: "blocked" }
-          : peer
-      )
-    )
+  const togglePauseSync = async (id: string, currentState: string) => {
+    await updatePeer(id, {
+      sync_state: currentState === "paused" ? "active" : "paused"
+    })
+  }
+
+  const blockPeer = async (id: string) => {
+    await updatePeer(id, { sync_state: "blocked" })
     setShowBlockDialog(false)
   }
 
-  const unsyncPeer = (id: string) => {
-    removePeer(id)
-  }
-
-  const getStatusColor = (status: PeerStatus) => {
-    switch (status) {
-      case "online":
+  const getStatusColor = (sync_state: string) => {
+    switch (sync_state) {
+      case "active":
         return "bg-green-500"
-      case "offline":
-        return "bg-gray-500"
       case "paused":
         return "bg-yellow-500"
       case "blocked":
@@ -138,21 +139,19 @@ export default function SyncedPeersPage() {
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${
-                        getStatusColor(peer.status)
-                      }`}>
-                        {peer.avatar}
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${getStatusColor(peer.sync_state)}`}>
+                        {peer.peer_user_id.slice(0, 2).toUpperCase()}
                       </div>
                       <div>
                         <h3 className="text-white font-medium flex items-center gap-2">
-                          {peer.name}
-                          <span className={`w-2 h-2 rounded-full ${getStatusColor(peer.status)}`} />
-                          {peer.syncState === "paused" && (
+                          Peer: {peer.peer_user_id.slice(0, 8)}...{/* Show partial id for now */}
+                          <span className={`w-2 h-2 rounded-full ${getStatusColor(peer.sync_state)}`} />
+                          {peer.sync_state === "paused" && (
                             <span className="text-xs px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-300">
                               Paused
                             </span>
                           )}
-                          {peer.syncState === "blocked" && (
+                          {peer.sync_state === "blocked" && (
                             <span className="text-xs px-2 py-0.5 rounded bg-red-500/20 text-red-300">
                               Blocked
                             </span>
@@ -160,18 +159,27 @@ export default function SyncedPeersPage() {
                         </h3>
                         <div className="flex items-center gap-2 text-sm text-gray-400">
                           <Clock className="h-4 w-4" />
-                          Last synced: {format(peer.lastSynced, "MMM d, yyyy HH:mm")}
+                          Last synced: {peer.last_synced ? format(new Date(peer.last_synced), "MMM d, yyyy HH:mm") : "Never"}
                         </div>
+                        {peer.active_features && peer.active_features.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {peer.active_features.map((feature) => (
+                              <span key={feature} className="text-xs bg-blue-900 text-blue-200 px-2 py-0.5 rounded">
+                                {feature}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {peer.syncState !== "blocked" && (
+                      {peer.sync_state !== "blocked" && (
                         <>
                           <Button
                             onClick={() => syncWithPeer(peer.id)}
                             className="bg-blue-500 hover:bg-blue-600"
                             size="sm"
-                            disabled={peer.syncState === "paused"}
+                            disabled={peer.sync_state === "paused"}
                           >
                             <Check className="h-4 w-4 mr-1" />
                             Sync Now
@@ -185,14 +193,14 @@ export default function SyncedPeersPage() {
                             <DropdownMenuContent className="bg-[#1a1a1b] border-gray-700 text-white">
                               <DropdownMenuItem
                                 className="hover:bg-[#2a2a2b] cursor-pointer"
-                                onClick={() => togglePauseSync(peer.id)}
+                                onClick={() => togglePauseSync(peer.id, peer.sync_state)}
                               >
-                                {peer.syncState === "paused" ? (
+                                {peer.sync_state === "paused" ? (
                                   <Play className="h-4 w-4 mr-2" />
                                 ) : (
                                   <Pause className="h-4 w-4 mr-2" />
                                 )}
-                                {peer.syncState === "paused" ? "Resume Sync" : "Pause Sync"}
+                                {peer.sync_state === "paused" ? "Resume Sync" : "Pause Sync"}
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="hover:bg-[#2a2a2b] cursor-pointer"
@@ -205,8 +213,8 @@ export default function SyncedPeersPage() {
                                 Block Peer
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                className="hover:bg-[#2a2a2b] cursor-pointer text-red-400"
-                                onClick={() => unsyncPeer(peer.id)}
+                                className="hover:bg-[#2a2a2b] cursor-pointer text-red-500"
+                                onClick={() => removePeer(peer.id)}
                               >
                                 <Link2Off className="h-4 w-4 mr-2" />
                                 Unsync
@@ -215,7 +223,7 @@ export default function SyncedPeersPage() {
                           </DropdownMenu>
                         </>
                       )}
-                      {peer.syncState === "blocked" && (
+                      {peer.sync_state === "blocked" && (
                         <Button
                           onClick={() => removePeer(peer.id)}
                           variant="ghost"
@@ -225,19 +233,6 @@ export default function SyncedPeersPage() {
                           <X className="h-4 w-4" />
                         </Button>
                       )}
-                    </div>
-                  </div>
-                  <div className="mt-3">
-                    <p className="text-sm text-gray-400 mb-2">Active Features:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {peer.activeFeatures.map((feature, index) => (
-                        <span
-                          key={index}
-                          className="px-2 py-1 rounded-full text-xs bg-[#2a2a2b] text-gray-300"
-                        >
-                          {feature}
-                        </span>
-                      ))}
                     </div>
                   </div>
                 </CardContent>
@@ -250,6 +245,8 @@ export default function SyncedPeersPage() {
               </div>
             )}
           </div>
+          {error && <div className="bg-red-900 text-red-200 p-2 mb-4 rounded">{error}</div>}
+          {loading && <div className="text-blue-300 mb-2">Loading...</div>}
         </CardContent>
       </Card>
 
@@ -259,7 +256,7 @@ export default function SyncedPeersPage() {
             <DialogTitle>Block Peer</DialogTitle>
           </DialogHeader>
           <div className="py-4">
-            <p>Are you sure you want to block {selectedPeer?.name}? This will:</p>
+            <p>Are you sure you want to block {selectedPeer?.peer_user_id}? This will:</p>
             <ul className="list-disc list-inside mt-2 text-gray-400">
               <li>Stop all syncing activities</li>
               <li>Prevent future sync requests</li>

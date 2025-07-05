@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -19,6 +19,13 @@ export default function AuthPage() {
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
   const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+    });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -55,9 +62,11 @@ export default function AuthPage() {
     <div className="container mx-auto p-4 bg-[#0E0E0F] min-h-screen flex items-center justify-center">
       <Card className="w-full max-w-md bg-[#141415] text-white">
         <CardHeader>
-          <Link href="/dashboard" className="flex items-center text-blue-500 hover:text-blue-400 mb-4">
-            <ArrowLeft className="mr-2" /> Back to Dashboard
-          </Link>
+          {user && (
+            <Link href="/dashboard" className="flex items-center text-blue-500 hover:text-blue-400 mb-4">
+              <ArrowLeft className="mr-2" /> Back to Dashboard
+            </Link>
+          )}
           <div className="flex justify-center mb-4">
             <button
               className={`px-4 py-2 rounded-t-lg font-semibold focus:outline-none transition-colors duration-200 ${isLogin ? 'bg-[#18181A] text-blue-400 border-b-2 border-blue-400' : 'bg-transparent text-gray-400 hover:text-blue-300'}`}

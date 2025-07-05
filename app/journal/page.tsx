@@ -7,103 +7,98 @@ import { Textarea } from "@/components/ui/textarea"
 import { Calendar } from "@/components/ui/calendar"
 import { format } from "date-fns"
 import Link from "next/link"
-import { Home, Trash2, Edit2 } from "lucide-react"
+import { Home, Trash2, Edit2, ArrowLeft } from "lucide-react"
+import { supabase } from "@/lib/supabaseClient"
 
 type JournalEntry = {
-  id: number
-  date: Date
+  id: string
+  user_id: string
+  entry_date: string
   content: string
+  created_at: string
 }
-
-const mockEntries: JournalEntry[] = [
-  {
-    id: 1,
-    date: new Date(2024, 3, 1),
-    content: "Started working on the new project today. Feeling excited about the possibilities and the team's energy. Need to focus on setting up the initial architecture properly.",
-  },
-  {
-    id: 2,
-    date: new Date(2024, 3, 3),
-    content: "Had a great brainstorming session with the team. Came up with some innovative solutions to the scalability challenges we were facing. Need to document these ideas properly.",
-  },
-  {
-    id: 3,
-    date: new Date(2024, 3, 5),
-    content: "Today was a bit challenging with some unexpected bugs in the system. However, managed to resolve them by the end of the day. Learned a lot about error handling in the process.",
-  },
-  {
-    id: 4,
-    date: new Date(2024, 3, 7),
-    content: "Personal reflection: Need to improve my time management skills. Spent too much time on minor details today. Will try the Pomodoro technique tomorrow to stay more focused.",
-  },
-  {
-    id: 5,
-    date: new Date(2024, 3, 8),
-    content: "Team meeting went well. Everyone seems aligned on the project goals. Need to follow up with the design team about the new UI components. Also, scheduled a code review for next week.",
-  },
-  {
-    id: 6,
-    date: new Date(2024, 3, 10),
-    content: "Learning: Started exploring the new React features. The new hooks are really powerful. Need to create a proof of concept to demonstrate their benefits to the team.",
-  },
-  {
-    id: 7,
-    date: new Date(2024, 3, 12),
-    content: "Project milestone achieved! The core functionality is now working as expected. Team celebration tomorrow. Need to prepare the demo for stakeholders.",
-  },
-  {
-    id: 8,
-    date: new Date(2024, 3, 15),
-    content: "Personal: Took a mental health day. Went for a long walk and cleared my mind. Sometimes stepping back helps you see the bigger picture more clearly.",
-  },
-  {
-    id: 9,
-    date: new Date(2024, 3, 17),
-    content: "Technical deep dive: Spent the day optimizing database queries. Managed to reduce response time by 40%. Documentation updated with the new patterns.",
-  },
-  {
-    id: 10,
-    date: new Date(2024, 3, 20),
-    content: "Team building: Organized a virtual game night. It was great to see everyone in a more relaxed setting. Planning to make this a monthly event.",
-  }
-]
 
 export default function JournalPage() {
   const [date, setDate] = useState<Date | undefined>(new Date())
   const [entry, setEntry] = useState("")
   const [entries, setEntries] = useState<JournalEntry[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    const storedEntries = localStorage.getItem("journalEntries")
-    if (storedEntries) {
-      setEntries(JSON.parse(storedEntries))
-    } else {
-      setEntries(mockEntries)
+    const fetchEntries = async () => {
+      setLoading(true)
+      setError(null)
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        setError("You must be logged in to view journal entries.")
+        setLoading(false)
+        return
+      }
+      setUserId(user.id)
+      const { data, error: fetchError } = await supabase
+        .from("journal_entries")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("entry_date", { ascending: false })
+      if (fetchError) {
+        setError("Failed to fetch journal entries.")
+      } else {
+        setEntries(data || [])
+      }
+      setLoading(false)
     }
+    fetchEntries()
   }, [])
 
-  useEffect(() => {
-    localStorage.setItem("journalEntries", JSON.stringify(entries))
-  }, [entries])
-
-  const handleSave = () => {
-    if (entry.trim() && date) {
-      const newEntry: JournalEntry = {
-        id: Date.now(),
-        date,
-        content: entry,
+  const handleSave = async () => {
+    if (entry.trim() && date && userId) {
+      setLoading(true)
+      setError(null)
+      const entryDate = date.toISOString().slice(0, 10)
+      const { data, error: insertError } = await supabase
+        .from("journal_entries")
+        .insert([
+          {
+            user_id: userId,
+            entry_date: entryDate,
+            content: entry,
+          },
+        ])
+        .select()
+      if (insertError) {
+        setError(insertError.message || "Failed to save entry.")
+      } else if (data && data.length > 0) {
+        setEntries((prev) => [data[0], ...prev])
+        setEntry("")
       }
-      setEntries([newEntry, ...entries])
-      setEntry("")
+      setLoading(false)
     }
   }
 
-  const handleDelete = (id: number) => {
-    setEntries(entries.filter(entry => entry.id !== id))
+  const handleDelete = async (id: string) => {
+    setLoading(true)
+    setError(null)
+    const { error: deleteError } = await supabase
+      .from("journal_entries")
+      .delete()
+      .eq("id", id)
+    if (deleteError) {
+      setError(deleteError.message || "Failed to delete entry.")
+    } else {
+      setEntries((prev) => prev.filter((entry) => entry.id !== id))
+    }
+    setLoading(false)
   }
 
   return (
     <div className="container mx-auto p-4 bg-[#0E0E0F] min-h-screen">
+      <Link href="/dashboard" className="flex items-center text-blue-500 hover:text-blue-400 mb-4">
+        <ArrowLeft className="mr-2" /> Back to Dashboard
+      </Link>
+      {error && <div className="bg-red-900 text-red-200 p-2 mb-4 rounded">{error}</div>}
+      {loading && <div className="text-blue-300 mb-2">Loading...</div>}
       <Card className="bg-[#141415] border border-gray-700">
         <CardHeader className="bg-black flex flex-row items-center justify-between">
           <div className="flex items-center gap-4">
@@ -153,7 +148,7 @@ export default function JournalPage() {
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="text-sm text-gray-400">
-                          {format(entry.date, "MMMM d, yyyy")}
+                          {format(new Date(entry.entry_date), "MMMM d, yyyy")}
                         </p>
                         <p className="text-white mt-2">{entry.content}</p>
                       </div>
@@ -163,6 +158,7 @@ export default function JournalPage() {
                           size="icon"
                           className="hover:bg-gray-800"
                           onClick={() => handleDelete(entry.id)}
+                          disabled={loading}
                         >
                           <Trash2 className="h-4 w-4 text-red-400" />
                         </Button>

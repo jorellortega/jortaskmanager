@@ -28,210 +28,179 @@ import {
   UserIcon,
   Settings,
   LogOut,
+  Briefcase,
+  Rss,
 } from "lucide-react"
 import { format, addDays, startOfWeek, parseISO } from "date-fns"
 import Link from "next/link"
-import type { Appointment } from "./appointments/page"
 import { supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 
-type Task = {
-  id: number
-  text: string
+type Todo = {
+  id: string
+  user_id: string
+  task: string
+  due_date: string | null
   completed: boolean
 }
 
-type DayTasks = {
-  [key: string]: Task[]
+type Appointment = {
+  id: string
+  user_id: string
+  title: string
+  date: string
+  time: string
 }
 
-// Add this new type
 type LeisureActivity = {
-  id: number
+  id: string
+  user_id: string
   activity: string
-  date: string
+  activity_date: string
+  completed: boolean
 }
 
 type FitnessActivity = {
-  id: number
+  id: string
+  user_id: string
   activity: string
-  date: string
-}
-
-// Define the Todo type
-type Todo = {
-  id: number
-  text: string
+  activity_date: string
   completed: boolean
-  dueDate: string
-  isOverdue: boolean
 }
 
 const allDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
-const sampleAppointments: Appointment[] = [
-  { id: 1, title: "Dentist Appointment", date: format(addDays(new Date(), 1), "yyyy-MM-dd"), time: "14:00" },
-  { id: 2, title: "Team Building Event", date: format(addDays(new Date(), 3), "yyyy-MM-dd"), time: "10:00" },
-  { id: 3, title: "Project Deadline", date: format(addDays(new Date(), 5), "yyyy-MM-dd"), time: "18:00" },
-]
-
-// Add this after the sampleAppointments
-const sampleLeisureActivities: LeisureActivity[] = [
-  { id: 1, activity: "Movie Night", date: format(addDays(new Date(), 2), "yyyy-MM-dd") },
-  { id: 2, activity: "Picnic in the Park", date: format(addDays(new Date(), 4), "yyyy-MM-dd") },
-  { id: 3, activity: "Beach Day", date: format(addDays(new Date(), 6), "yyyy-MM-dd") },
-]
-
-const sampleFitnessActivities: FitnessActivity[] = [
-  { id: 1, activity: "Morning Run", date: format(addDays(new Date(), 1), "yyyy-MM-dd") },
-  { id: 2, activity: "Yoga Class", date: format(addDays(new Date(), 3), "yyyy-MM-dd") },
-  { id: 3, activity: "Gym Workout", date: format(addDays(new Date(), 5), "yyyy-MM-dd") },
-]
-
-// Define sampleTasks
-const sampleTasks: { [key: string]: { id: number; text: string; completed: boolean }[] } = {
-  Monday: [
-    { id: 1, text: "Grocery Shopping", completed: false },
-    { id: 2, text: "Pay Bills", completed: false },
-  ],
-  Tuesday: [{ id: 3, text: "Doctor's Appointment", completed: false }],
-  Wednesday: [{ id: 4, text: "Book Club Meeting", completed: false }],
-  Thursday: [{ id: 5, text: "Laundry", completed: false }],
-  Friday: [{ id: 6, text: "Dinner with Friends", completed: false }],
-  Saturday: [{ id: 7, text: "Weekend Getaway", completed: false }],
-  Sunday: [{ id: 8, text: "Relax and Recharge", completed: false }],
-}
-
-const isCurrentDay = (day: string) => {
-  return day === format(new Date(), "EEEE")
-}
-
 export default function WeeklyTaskManager() {
   const [currentDay, setCurrentDay] = useState<string>("")
   const [days, setDays] = useState<string[]>([])
-  const [tasks, setTasks] = useState<DayTasks>({})
-  const [focusedDayIndex, setFocusedDayIndex] = useState(0)
+  const [todos, setTodos] = useState<Todo[]>([])
   const [appointments, setAppointments] = useState<Appointment[]>([])
-  // Add this to the component's state
   const [leisureActivities, setLeisureActivities] = useState<LeisureActivity[]>([])
   const [fitnessActivities, setFitnessActivities] = useState<FitnessActivity[]>([])
-  // Add this new state variable
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [userName, setUserName] = useState<string | null>(null);
+  const [focusedDayIndex, setFocusedDayIndex] = useState(0)
+  const [userId, setUserId] = useState<string | null>(null)
+  const [userName, setUserName] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [addingTask, setAddingTask] = useState(false)
+  const [newTaskText, setNewTaskText] = useState("")
   const router = useRouter();
 
   useEffect(() => {
-    const storedTodos = localStorage.getItem("todos")
-    if (storedTodos) {
-      const todos: Todo[] = JSON.parse(storedTodos)
-      const tasksByDay: DayTasks = {}
-      todos.forEach((todo) => {
-        const day = format(parseISO(todo.dueDate), "EEEE")
-        if (!tasksByDay[day]) {
-          tasksByDay[day] = []
-        }
-        tasksByDay[day].push({
-          id: todo.id,
-          text: todo.text,
-          completed: todo.completed,
-        })
-      })
-      setTasks(tasksByDay)
+    const fetchAll = async () => {
+      setLoading(true)
+      setError(null)
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        setError("You must be logged in to view dashboard data.")
+        setLoading(false)
+        return
+      }
+      setUserId(user.id)
+      // Fetch todos
+      const { data: todosData, error: todosError } = await supabase
+        .from("todos")
+        .select("*")
+        .eq("user_id", user.id)
+      // Fetch appointments
+      const { data: appointmentsData, error: appointmentsError } = await supabase
+        .from("appointments")
+        .select("*")
+        .eq("user_id", user.id)
+      // Fetch leisure
+      const { data: leisureData, error: leisureError } = await supabase
+        .from("leisure_activities")
+        .select("*")
+        .eq("user_id", user.id)
+      // Fetch fitness
+      const { data: fitnessData, error: fitnessError } = await supabase
+        .from("fitness_activities")
+        .select("*")
+        .eq("user_id", user.id)
+      if (todosError || appointmentsError || leisureError || fitnessError) {
+        setError("Failed to fetch dashboard data.")
+      } else {
+        setTodos(todosData || [])
+        setAppointments(appointmentsData || [])
+        setLeisureActivities(leisureData || [])
+        setFitnessActivities(fitnessData || [])
+      }
+      setLoading(false)
     }
-  }, []) // Empty dependency array to run only once
+    fetchAll()
+  }, [])
 
   useEffect(() => {
     const now = new Date()
     const dayIndex = now.getDay()
-    const todayName = allDays[dayIndex === 0 ? 6 : dayIndex - 1] // Adjust for Sunday
-    setCurrentDay(todayName)
-
-    // Reorder days to start from current day
-    const reorderedDays = [
-      ...allDays.slice(dayIndex === 0 ? 6 : dayIndex - 1),
-      ...allDays.slice(0, dayIndex === 0 ? 6 : dayIndex - 1),
-    ]
-    setDays(reorderedDays.slice(0, 7)) // Take all 7 days
-
-    // Initialize tasks state with sample data
-    const initialTasks: DayTasks = {}
-    reorderedDays.slice(0, 7).forEach((day, index) => {
-      const date = addDays(startOfWeek(now, { weekStartsOn: 1 }), index)
-      const dayName = format(date, "EEEE") as keyof typeof sampleTasks
-      initialTasks[day] = sampleTasks[dayName].map((task) => ({
-        ...task,
-        id: Date.now() + task.id, // Ensure unique IDs
-      }))
-    })
-    setTasks((prevTasks) => ({ ...prevTasks, ...initialTasks }))
-
-    // Load appointments from localStorage
-    const storedAppointments = localStorage.getItem("appointments")
-    if (storedAppointments) {
-      setAppointments(JSON.parse(storedAppointments))
-    } else {
-      setAppointments(sampleAppointments)
-      localStorage.setItem("appointments", JSON.stringify(sampleAppointments))
-    }
-
-    // Set leisure and fitness activities
-    setLeisureActivities(sampleLeisureActivities)
-    setFitnessActivities(sampleFitnessActivities)
-  }, []) // Empty dependency array to run only once
+    // Map JS Sunday (0) to 6, Monday (1) to 0, etc.
+    const todayIdx = dayIndex === 0 ? 6 : dayIndex - 1
+    setCurrentDay(allDays[todayIdx])
+    setDays(allDays) // Always Monday-Sunday
+    setFocusedDayIndex(todayIdx)
+  }, [])
 
   useEffect(() => {
     localStorage.setItem("appointments", JSON.stringify(appointments))
   }, [appointments])
 
-  useEffect(() => {
-    // Fetch the current user's name from the public users table
-    const fetchUserName = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data, error } = await supabase
-          .from('users')
-          .select('name')
-          .eq('id', user.id)
-          .single();
-        if (!error && data) {
-          setUserName(data.name);
-        }
-      }
-    };
-    fetchUserName();
-  }, []);
+  const addTask = (day: string) => {
+    setAddingTask(true)
+    setNewTaskText("")
+  }
 
-  const addTask = useCallback(
-    (day: string) => {
-      const taskName = `New Task ${tasks[day]?.length + 1 || 1}`
-      const newTask = {
-        id: Date.now(),
-        text: taskName,
-        completed: false,
-        dueDate: format(addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), days.indexOf(day)), "yyyy-MM-dd"),
-        isOverdue: false,
-      }
-      setTasks((prev) => ({
-        ...prev,
-        [day]: [...(prev[day] || []), newTask],
-      }))
-      const storedTodos = JSON.parse(localStorage.getItem("todos") || "[]")
-      localStorage.setItem("todos", JSON.stringify([...storedTodos, newTask]))
-    },
-    [tasks, days],
-  )
+  const handleAddTaskConfirm = async () => {
+    if (!userId || !focusedDay || !newTaskText.trim()) {
+      setAddingTask(false)
+      setNewTaskText("")
+      return
+    }
+    setLoading(true)
+    setError(null)
+    const dueDate = getDateForDay(focusedDay)
+    const { data, error: insertError } = await supabase
+      .from("todos")
+      .insert([
+        {
+          user_id: userId,
+          task: newTaskText.trim(),
+          due_date: dueDate,
+          completed: false,
+        },
+      ])
+      .select()
+    if (insertError) {
+      setError(insertError.message || "Failed to add task.")
+    } else if (data && data.length > 0) {
+      setTodos((prev) => [...prev, data[0]])
+    }
+    setAddingTask(false)
+    setNewTaskText("")
+    setLoading(false)
+  }
 
-  const toggleTask = useCallback((day: string, taskId: number) => {
-    setTasks((prev) => ({
-      ...prev,
-      [day]: prev[day].map((task) => (task.id === taskId ? { ...task, completed: !task.completed } : task)),
-    }))
-    const storedTodos = JSON.parse(localStorage.getItem("todos") || "[]")
-    const updatedTodos = storedTodos.map((todo: Todo) =>
-      todo.id === taskId ? { ...todo, completed: !todo.completed } : todo,
-    )
-    localStorage.setItem("todos", JSON.stringify(updatedTodos))
-  }, [])
+  const handleAddTaskCancel = () => {
+    setAddingTask(false)
+    setNewTaskText("")
+  }
+
+  const toggleTask = async (day: string, taskId: string) => {
+    setError(null)
+    setLoading(true)
+    const todo = todos.find((t) => t.id === taskId)
+    if (!todo) return
+    const { data, error: updateError } = await supabase
+      .from("todos")
+      .update({ completed: !todo.completed })
+      .eq("id", taskId)
+      .select()
+    if (updateError) {
+      setError(updateError.message || "Failed to update task.")
+    } else if (data && data.length > 0) {
+      setTodos((prev) => prev.map((t) => (t.id === taskId ? data[0] : t)))
+    }
+    setLoading(false)
+  }
 
   const navigateDay = (direction: "prev" | "next") => {
     setFocusedDayIndex((prevIndex) => {
@@ -255,11 +224,22 @@ export default function WeeklyTaskManager() {
   }
 
   const focusedDay = days[focusedDayIndex] || ""
+  // Always map day label to correct date in current week
+  function getDateForDay(day: string) {
+    const idx = allDays.indexOf(day)
+    return format(addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), idx), "yyyy-MM-dd")
+  }
+  const focusedDate = focusedDay ? getDateForDay(focusedDay) : ""
+  const todosForDay = todos.filter((todo) => todo.due_date === focusedDate)
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.push('/');
   };
+
+  function isCurrentDay(day: string) {
+    return day === format(new Date(), "EEEE")
+  }
 
   return (
     <div className="container mx-auto p-4 pb-24">
@@ -279,6 +259,9 @@ export default function WeeklyTaskManager() {
               </Link>
               <Link href="/expenses">
                 <DollarSign className="h-5 w-5 text-green-400 cursor-pointer hover:text-green-300" />
+              </Link>
+              <Link href="/business">
+                <Briefcase className="h-5 w-5 text-gray-200 cursor-pointer hover:text-green-400" />
               </Link>
               <Link href="/leisure">
                 <Sun className="h-5 w-5 text-yellow-400 cursor-pointer hover:text-yellow-300" />
@@ -362,73 +345,63 @@ export default function WeeklyTaskManager() {
                 <div className="flex items-center space-x-4">
                   {appointments.some(
                     (apt) =>
-                      format(new Date(apt.date), "yyyy-MM-dd") ===
-                      format(
-                        addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), days.indexOf(focusedDay)),
-                        "yyyy-MM-dd",
-                      ),
+                      format(new Date(apt.date), "yyyy-MM-dd") === focusedDate,
                   ) && <Clock className="h-5 w-5 text-red-500" />}
                   {leisureActivities.some(
-                    (activity) =>
-                      format(new Date(activity.date), "yyyy-MM-dd") ===
-                      format(
-                        addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), days.indexOf(focusedDay)),
-                        "yyyy-MM-dd",
-                      ),
+                    (activity) => activity.activity_date === focusedDate,
                   ) && <Sun className="h-5 w-5 text-yellow-400" />}
                   {fitnessActivities.some(
-                    (activity) =>
-                      format(new Date(activity.date), "yyyy-MM-dd") ===
-                      format(
-                        addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), days.indexOf(focusedDay)),
-                        "yyyy-MM-dd",
-                      ),
+                    (activity) => activity.activity_date === focusedDate,
                   ) && <Dumbbell className="h-5 w-5 text-green-400" />}
                 </div>
                 <span className="text-xs text-gray-300">
-                  {format(
-                    addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), days.indexOf(focusedDay)),
-                    "MMM d, yyyy",
-                  )}
+                  {focusedDate ? format(new Date(focusedDate), "MMM d, yyyy") : ""}
                 </span>
               </CardTitle>
             </CardHeader>
             {/* Add this to the focused day card content to display leisure activities: */}
             <CardContent className="p-2 space-y-4">
-              <div className="space-y-2">
-                {tasks[focusedDay]?.map((task) => (
-                  <div key={task.id} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`task-${task.id}`}
-                      checked={task.completed}
-                      onCheckedChange={() => toggleTask(focusedDay, task.id)}
-                    />
-                    <label
-                      htmlFor={`task-${task.id}`}
-                      className={`flex-grow ${task.completed ? "line-through text-gray-400 opacity-45" : "text-white"}`}
-                    >
-                      {task.text}
-                    </label>
-                  </div>
-                ))}
-              </div>
+              {addingTask && (
+                <div className="flex items-center space-x-2 mb-2">
+                  <Checkbox disabled checked={false} />
+                  <input
+                    autoFocus
+                    className="flex-grow p-1 rounded bg-[#18181A] border border-gray-700 text-white outline-none"
+                    placeholder="Enter new task..."
+                    value={newTaskText}
+                    onChange={e => setNewTaskText(e.target.value)}
+                    onBlur={handleAddTaskConfirm}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") handleAddTaskConfirm()
+                      if (e.key === "Escape") handleAddTaskCancel()
+                    }}
+                  />
+                </div>
+              )}
+              {todosForDay.map((task) => (
+                <div key={task.id} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`task-${task.id}`}
+                    checked={task.completed}
+                    onCheckedChange={() => toggleTask(focusedDay, task.id)}
+                  />
+                  <label
+                    htmlFor={`task-${task.id}`}
+                    className={`flex-grow ${task.completed ? "line-through text-gray-400 opacity-45" : "text-white"}`}
+                  >
+                    {task.task}
+                  </label>
+                </div>
+              ))}
               {appointments.some(
                 (apt) =>
-                  format(new Date(apt.date), "yyyy-MM-dd") ===
-                  format(addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), days.indexOf(focusedDay)), "yyyy-MM-dd"),
+                  format(new Date(apt.date), "yyyy-MM-dd") === focusedDate,
               ) && (
                 <div className="mt-4">
                   <h3 className="text-red-500 font-semibold mb-2">Appointments:</h3>
                   <ul className="list-disc list-inside">
                     {appointments
-                      .filter(
-                        (apt) =>
-                          format(new Date(apt.date), "yyyy-MM-dd") ===
-                          format(
-                            addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), days.indexOf(focusedDay)),
-                            "yyyy-MM-dd",
-                          ),
-                      )
+                      .filter((apt) => format(new Date(apt.date), "yyyy-MM-dd") === focusedDate)
                       .map((apt) => (
                         <li key={apt.id} className="text-white flex items-center">
                           <Clock className="h-4 w-4 text-red-500 mr-2 inline" />
@@ -441,22 +414,13 @@ export default function WeeklyTaskManager() {
                 </div>
               )}
               {leisureActivities.some(
-                (activity) =>
-                  format(new Date(activity.date), "yyyy-MM-dd") ===
-                  format(addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), days.indexOf(focusedDay)), "yyyy-MM-dd"),
+                (activity) => activity.activity_date === focusedDate,
               ) && (
                 <div className="mt-4">
                   <h3 className="text-yellow-400 font-semibold mb-2">Leisure Activities:</h3>
                   <ul className="list-disc list-inside">
                     {leisureActivities
-                      .filter(
-                        (activity) =>
-                          format(new Date(activity.date), "yyyy-MM-dd") ===
-                          format(
-                            addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), days.indexOf(focusedDay)),
-                            "yyyy-MM-dd",
-                          ),
-                      )
+                      .filter((activity) => activity.activity_date === focusedDate)
                       .map((activity) => (
                         <li key={activity.id} className="text-white">
                           {activity.activity}
@@ -466,22 +430,13 @@ export default function WeeklyTaskManager() {
                 </div>
               )}
               {fitnessActivities.some(
-                (activity) =>
-                  format(new Date(activity.date), "yyyy-MM-dd") ===
-                  format(addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), days.indexOf(focusedDay)), "yyyy-MM-dd"),
+                (activity) => activity.activity_date === focusedDate,
               ) && (
                 <div className="mt-4">
                   <h3 className="text-green-400 font-semibold mb-2">Fitness Activities:</h3>
                   <ul className="list-disc list-inside">
                     {fitnessActivities
-                      .filter(
-                        (activity) =>
-                          format(new Date(activity.date), "yyyy-MM-dd") ===
-                          format(
-                            addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), days.indexOf(focusedDay)),
-                            "yyyy-MM-dd",
-                          ),
-                      )
+                      .filter((activity) => activity.activity_date === focusedDate)
                       .map((activity) => (
                         <li key={activity.id} className="text-white">
                           {activity.activity}
@@ -490,7 +445,7 @@ export default function WeeklyTaskManager() {
                   </ul>
                 </div>
               )}
-              <Button onClick={() => addTask(focusedDay)} className="w-full">
+              <Button onClick={() => addTask(focusedDay)} className="w-full" disabled={addingTask}>
                 Add Task
               </Button>
             </CardContent>
@@ -514,41 +469,24 @@ export default function WeeklyTaskManager() {
                       <div className="flex items-center">
                         {appointments.some(
                           (apt) =>
-                            format(new Date(apt.date), "yyyy-MM-dd") ===
-                            format(
-                              addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), days.indexOf(day)),
-                              "yyyy-MM-dd",
-                            ),
+                            format(new Date(apt.date), "yyyy-MM-dd") === getDateForDay(day),
                         ) && <Clock className="h-4 w-4 text-red-500 mr-2" />}
                         {leisureActivities.some(
-                          (activity) =>
-                            format(new Date(activity.date), "yyyy-MM-dd") ===
-                            format(
-                              addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), days.indexOf(day)),
-                              "yyyy-MM-dd",
-                            ),
+                          (activity) => activity.activity_date === getDateForDay(day),
                         ) && <Sun className="h-4 w-4 text-yellow-400 mr-2" />}
                         {fitnessActivities.some(
-                          (activity) =>
-                            format(new Date(activity.date), "yyyy-MM-dd") ===
-                            format(
-                              addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), days.indexOf(day)),
-                              "yyyy-MM-dd",
-                            ),
+                          (activity) => activity.activity_date === getDateForDay(day),
                         ) && <Dumbbell className="h-4 w-4 text-green-400 mr-2" />}
                         {day.toUpperCase()}
                       </div>
                       <span className="text-xs text-gray-300">
-                        {format(
-                          addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), days.indexOf(day)),
-                          "MMM d, yyyy",
-                        )}
+                        {focusedDate ? format(new Date(focusedDate), "MMM d, yyyy") : ""}
                       </span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-1">
                     <p className="text-sm text-gray-400 flex items-center justify-center h-full">
-                      {tasks[day]?.length || 0} task(s)
+                      {todos.filter((todo) => todo.due_date === getDateForDay(day)).length} task(s)
                     </p>
                   </CardContent>
                 </div>
@@ -562,6 +500,10 @@ export default function WeeklyTaskManager() {
           <Link href="/" className="flex flex-col items-center text-gray-300 hover:text-blue-400 transition">
             <Home className="h-6 w-6 mb-1" />
             <span className="text-xs">Home</span>
+          </Link>
+          <Link href="/feed" className="flex flex-col items-center text-gray-300 hover:text-blue-400 transition">
+            <Rss className="h-6 w-6 mb-1" />
+            <span className="text-xs">Feed</span>
           </Link>
           <Link href="/auth" className="flex flex-col items-center text-gray-300 hover:text-blue-400 transition">
             <UserIcon className="h-6 w-6 mb-1" />
@@ -577,6 +519,8 @@ export default function WeeklyTaskManager() {
           </button>
         </div>
       </nav>
+      {error && <div className="bg-red-900 text-red-200 p-2 mb-4 rounded">{error}</div>}
+      {loading && <div className="text-blue-300 mb-2">Loading...</div>}
     </div>
   )
 }

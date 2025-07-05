@@ -9,91 +9,119 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { ArrowLeft, Plus, Trash2, Edit2, Save } from "lucide-react"
 import Link from "next/link"
+import { supabase } from "@/lib/supabaseClient"
 
 type Note = {
-  id: number
+  id: string
+  user_id: string
   title: string
   content: string
-  createdAt: string
+  created_at: string
 }
-
-const mockNotes: Note[] = [
-  {
-    id: 1,
-    title: "Project Requirements",
-    content: "1. User authentication\n2. Task management\n3. Calendar integration\n4. Team collaboration\n5. Analytics dashboard",
-    createdAt: "2024-03-15T10:00:00.000Z",
-  },
-  {
-    id: 2,
-    title: "Meeting Notes",
-    content: "Team discussed:\n- Sprint planning for next week\n- UI/UX improvements needed\n- Database optimization required\n- New feature requests from clients",
-    createdAt: "2024-03-16T14:30:00.000Z",
-  },
-  {
-    id: 3,
-    title: "Code Review Checklist",
-    content: "Before submitting PR:\n1. Run all tests\n2. Check for linting errors\n3. Update documentation\n4. Review performance impact\n5. Test edge cases",
-    createdAt: "2024-03-17T09:15:00.000Z",
-  },
-  {
-    id: 4,
-    title: "Ideas for Next Sprint",
-    content: "Potential features:\n- Dark mode toggle\n- Export functionality\n- Mobile app version\n- Integration with Slack\n- Advanced search filters",
-    createdAt: "2024-03-18T16:45:00.000Z",
-  },
-  {
-    id: 5,
-    title: "Bug Fixes Needed",
-    content: "High priority:\n1. Login page timeout issue\n2. Calendar sync problems\n3. Data persistence errors\n4. Mobile responsiveness bugs\n5. Performance optimization",
-    createdAt: "2024-03-19T11:20:00.000Z",
-  },
-]
 
 export default function NotesPage() {
   const [notes, setNotes] = useState<Note[]>([])
   const [newNote, setNewNote] = useState({ title: "", content: "" })
   const [editingNote, setEditingNote] = useState<Note | null>(null)
+  const [editingFields, setEditingFields] = useState({ title: "", content: "" })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    const storedNotes = localStorage.getItem("notes")
-    if (storedNotes) {
-      setNotes(JSON.parse(storedNotes))
-    } else {
-      setNotes(mockNotes)
+    const fetchNotes = async () => {
+      setLoading(true)
+      setError(null)
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        setError("You must be logged in to view notes.")
+        setLoading(false)
+        return
+      }
+      setUserId(user.id)
+      const { data, error: fetchError } = await supabase
+        .from("notes")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+      if (fetchError) {
+        setError("Failed to fetch notes.")
+      } else {
+        setNotes(data || [])
+      }
+      setLoading(false)
     }
+    fetchNotes()
   }, [])
 
-  useEffect(() => {
-    localStorage.setItem("notes", JSON.stringify(notes))
-  }, [notes])
-
-  const addNote = (e: React.FormEvent) => {
+  const addNote = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError(null)
+    if (!userId) {
+      setError("You must be logged in to add notes.")
+      return
+    }
     if (newNote.title.trim() && newNote.content.trim()) {
-      const newNoteItem: Note = {
-        id: Date.now(),
-        title: newNote.title.trim(),
-        content: newNote.content.trim(),
-        createdAt: new Date().toISOString(),
+      setLoading(true)
+      const { data, error: insertError } = await supabase
+        .from("notes")
+        .insert([
+          {
+            user_id: userId,
+            title: newNote.title.trim(),
+            content: newNote.content.trim(),
+          },
+        ])
+        .select()
+      if (insertError) {
+        setError(insertError.message || "Failed to add note.")
+      } else if (data && data.length > 0) {
+        setNotes((prev) => [data[0], ...prev])
+        setNewNote({ title: "", content: "" })
       }
-      setNotes([newNoteItem, ...notes])
-      setNewNote({ title: "", content: "" })
+      setLoading(false)
     }
   }
 
-  const deleteNote = (id: number) => {
-    setNotes(notes.filter((note) => note.id !== id))
+  const deleteNote = async (id: string) => {
+    setError(null)
+    setLoading(true)
+    const { error: deleteError } = await supabase
+      .from("notes")
+      .delete()
+      .eq("id", id)
+    if (deleteError) {
+      setError(deleteError.message || "Failed to delete note.")
+    } else {
+      setNotes((prev) => prev.filter((note) => note.id !== id))
+    }
+    setLoading(false)
   }
 
   const startEditing = (note: Note) => {
     setEditingNote(note)
+    setEditingFields({ title: note.title, content: note.content })
   }
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (editingNote) {
-      setNotes(notes.map((note) => (note.id === editingNote.id ? editingNote : note)))
-      setEditingNote(null)
+      setError(null)
+      setLoading(true)
+      const { data, error: updateError } = await supabase
+        .from("notes")
+        .update({
+          title: editingFields.title,
+          content: editingFields.content,
+        })
+        .eq("id", editingNote.id)
+        .select()
+      if (updateError) {
+        setError(updateError.message || "Failed to update note.")
+      } else if (data && data.length > 0) {
+        setNotes((prev) => prev.map((note) => note.id === editingNote.id ? data[0] : note))
+        setEditingNote(null)
+      }
+      setLoading(false)
     }
   }
 
@@ -103,6 +131,8 @@ export default function NotesPage() {
         <ArrowLeft className="mr-2" /> Back to Dashboard
       </Link>
       <h1 className="text-2xl font-bold mb-4">Notes</h1>
+      {error && <div className="bg-red-900 text-red-200 p-2 mb-4 rounded">{error}</div>}
+      {loading && <div className="text-blue-300 mb-2">Loading...</div>}
       <Card className="bg-[#141415] border border-gray-700 mb-4">
         <CardHeader>
           <CardTitle className="text-white">Add New Note</CardTitle>
@@ -135,17 +165,17 @@ export default function NotesPage() {
               {editingNote && editingNote.id === note.id ? (
                 <div className="space-y-4">
                   <Input
-                    value={editingNote.title}
-                    onChange={(e) => setEditingNote({ ...editingNote, title: e.target.value })}
+                    value={editingFields.title}
+                    onChange={(e) => setEditingFields({ ...editingFields, title: e.target.value })}
                     className="bg-[#1A1A1B] border-gray-700 text-white"
                   />
                   <Textarea
-                    value={editingNote.content}
-                    onChange={(e) => setEditingNote({ ...editingNote, content: e.target.value })}
+                    value={editingFields.content}
+                    onChange={(e) => setEditingFields({ ...editingFields, content: e.target.value })}
                     className="bg-[#1A1A1B] border-gray-700 text-white"
                     rows={4}
                   />
-                  <Button onClick={saveEdit} className="w-full">
+                  <Button onClick={saveEdit} className="w-full" disabled={loading}>
                     <Save className="mr-2 h-4 w-4" /> Save Changes
                   </Button>
                 </div>
@@ -154,12 +184,12 @@ export default function NotesPage() {
                   <h2 className="text-xl font-semibold mb-2">{note.title}</h2>
                   <p className="text-gray-300 mb-4">{note.content}</p>
                   <div className="flex justify-between items-center text-sm text-gray-400">
-                    <span>Created: {new Date(note.createdAt).toLocaleString()}</span>
+                    <span>Created: {new Date(note.created_at).toLocaleString()}</span>
                     <div className="space-x-2">
                       <Button variant="outline" size="sm" onClick={() => startEditing(note)}>
                         <Edit2 className="mr-2 h-4 w-4" /> Edit
                       </Button>
-                      <Button variant="destructive" size="sm" onClick={() => deleteNote(note.id)}>
+                      <Button variant="destructive" size="sm" onClick={() => deleteNote(note.id)} disabled={loading}>
                         <Trash2 className="mr-2 h-4 w-4" /> Delete
                       </Button>
                     </div>
