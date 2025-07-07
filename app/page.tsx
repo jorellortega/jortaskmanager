@@ -152,8 +152,7 @@ export default function Home() {
                   Ready to Transform Your Productivity?
                 </h3>
                 <p className="text-lg text-gray-800 mb-6 max-w-2xl mx-auto">
-                  Join thousands of users who are already organizing their life with Task Manager by JOR. 
-                  Start your journey to better productivity today - it's completely free!
+                  Start organizing your life with Task Manager by JOR. Begin your journey to better productivity today – free for the first 100 users!
                 </p>
                 <Link 
                   href="/auth" 
@@ -163,7 +162,7 @@ export default function Home() {
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
                 <p className="text-sm text-gray-700 mt-4">
-                  No credit card required • Free forever • Start in seconds
+                  No credit card required • Free for the first 100 users • Start in seconds
                 </p>
               </div>
             </div>

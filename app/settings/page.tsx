@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,16 +8,50 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { ArrowLeft, Bell, Moon, User } from "lucide-react"
 import Link from "next/link"
+import { supabase } from '@/lib/supabaseClient'
 
 export default function Settings() {
   const [darkMode, setDarkMode] = useState(false)
   const [notifications, setNotifications] = useState(true)
-  const [username, setUsername] = useState("JohnDoe")
-  const [email, setEmail] = useState("john.doe@example.com")
+  const [username, setUsername] = useState("")
+  const [email, setEmail] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
 
-  const handleSave = () => {
-    // In a real application, you would save these settings to your backend or local storage
-    console.log("Settings saved:", { darkMode, notifications, username, email })
+  useEffect(() => {
+    const fetchProfile = async () => {
+      setLoading(true)
+      setError(null)
+      setSuccess(null)
+      const { data, error } = await supabase.auth.getUser()
+      if (error || !data.user) {
+        setError("Failed to fetch user profile.")
+        setLoading(false)
+        return
+      }
+      setEmail(data.user.email || "")
+      setUsername(data.user.user_metadata?.name || "")
+      setLoading(false)
+    }
+    fetchProfile()
+  }, [])
+
+  const handleSave = async () => {
+    setLoading(true)
+    setError(null)
+    setSuccess(null)
+    // Update user metadata (username) and email if changed
+    const updates: any = {}
+    if (username) updates.data = { name: username }
+    if (email) updates.email = email
+    const { data, error } = await supabase.auth.updateUser(updates)
+    if (error) {
+      setError(error.message || "Failed to update profile.")
+    } else {
+      setSuccess("Profile updated successfully.")
+    }
+    setLoading(false)
   }
 
   return (
@@ -38,6 +72,8 @@ export default function Settings() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {error && <div className="text-red-400 text-sm">{error}</div>}
+          {success && <div className="text-green-400 text-sm">{success}</div>}
           <div>
             <Label htmlFor="username" className="text-gray-200">Username</Label>
             <Input
@@ -45,6 +81,7 @@ export default function Settings() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="bg-[#1A1A1B] border-gray-700 text-white"
+              disabled={loading}
             />
           </div>
           <div>
@@ -55,8 +92,12 @@ export default function Settings() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="bg-[#1A1A1B] border-gray-700 text-white"
+              disabled={loading}
             />
           </div>
+          <Button onClick={handleSave} className="w-full" disabled={loading}>
+            {loading ? "Saving..." : "Save Profile"}
+          </Button>
         </CardContent>
       </Card>
 
@@ -85,10 +126,6 @@ export default function Settings() {
           <Switch id="notifications" checked={notifications} onCheckedChange={setNotifications} />
         </CardContent>
       </Card>
-
-      <Button onClick={handleSave} className="w-full">
-        Save Settings
-      </Button>
     </div>
   )
 }

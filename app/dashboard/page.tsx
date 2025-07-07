@@ -249,13 +249,13 @@ export default function WeeklyTaskManager() {
       )}
       <Card className="bg-[#141415] border border-gray-700 mb-4 mt-2 p-2 w-full">
         <CardContent className="p-0">
-          <div className="flex justify-between items-center text-white">
-            <div className="flex items-center space-x-4">
+          <div className="flex flex-nowrap items-center gap-4 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent px-2 py-2 w-full">
+            <div className="flex items-center gap-4 min-w-max">
               <Link href="/calendar">
-                <CalendarDays className="h-5 w-5 cursor-pointer hover:text-blue-400" />
+                <CalendarDays className="h-5 w-5 text-blue-400 cursor-pointer hover:text-blue-300" />
               </Link>
               <Link href="/appointments">
-                <Clock className="h-5 w-5 cursor-pointer hover:text-blue-400" />
+                <Clock className="h-5 w-5 text-blue-400 cursor-pointer hover:text-blue-300" />
               </Link>
               <Link href="/expenses">
                 <DollarSign className="h-5 w-5 text-green-400 cursor-pointer hover:text-green-300" />
@@ -303,15 +303,6 @@ export default function WeeklyTaskManager() {
                 <BookOpen className="h-5 w-5 text-green-400 cursor-pointer hover:text-green-300" />
               </Link>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => navigateDay("prev")}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" onClick={goToToday}>
-              Today
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => navigateDay("next")}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
           </div>
         </CardContent>
       </Card>
