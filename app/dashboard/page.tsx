@@ -247,65 +247,6 @@ export default function WeeklyTaskManager() {
       {userName && (
         <div className="text-lg font-semibold text-white mb-2">Welcome, {userName}!</div>
       )}
-      <Card className="bg-[#141415] border border-gray-700 mb-4 mt-2 p-2 w-full">
-        <CardContent className="p-0">
-          <div className="flex flex-nowrap items-center gap-4 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent px-2 py-2 w-full">
-            <div className="flex items-center gap-4 min-w-max">
-              <Link href="/calendar">
-                <CalendarDays className="h-5 w-5 text-blue-400 cursor-pointer hover:text-blue-300" />
-              </Link>
-              <Link href="/appointments">
-                <Clock className="h-5 w-5 text-blue-400 cursor-pointer hover:text-blue-300" />
-              </Link>
-              <Link href="/expenses">
-                <DollarSign className="h-5 w-5 text-green-400 cursor-pointer hover:text-green-300" />
-              </Link>
-              <Link href="/business">
-                <Briefcase className="h-5 w-5 text-gray-200 cursor-pointer hover:text-green-400" />
-              </Link>
-              <Link href="/leisure">
-                <Sun className="h-5 w-5 text-yellow-400 cursor-pointer hover:text-yellow-300" />
-              </Link>
-              <Link href="/meal-planning">
-                <Utensils className="h-5 w-5 text-orange-400 cursor-pointer hover:text-orange-300" />
-              </Link>
-              <Link href="/fitness">
-                <Dumbbell className="h-5 w-5 text-green-400 cursor-pointer hover:text-green-300" />
-              </Link>
-              <Link href="/birthdays">
-                <Cake className="h-5 w-5 text-pink-400 cursor-pointer hover:text-pink-300" />
-              </Link>
-              <Link href="/routines">
-                <Repeat className="h-5 w-5 text-purple-400 cursor-pointer hover:text-purple-300" />
-              </Link>
-              <Link href="/todo">
-                <CheckSquare className="h-5 w-5 text-indigo-400 cursor-pointer hover:text-indigo-300" />
-              </Link>
-              <Link href="/goals">
-                <Target className="h-5 w-5 text-red-400 cursor-pointer hover:text-red-300" />
-              </Link>
-              <Link href="/peersync">
-                <Users className="h-5 w-5 text-blue-400 cursor-pointer hover:text-blue-300" />
-              </Link>
-              <Link href="/brainstorming">
-                <Lightbulb className="h-5 w-5 text-yellow-400 cursor-pointer hover:text-yellow-300" />
-              </Link>
-              <Link href="/travel">
-                <Plane className="h-5 w-5 text-purple-400 cursor-pointer hover:text-purple-300" />
-              </Link>
-              <Link href="/work-clock">
-                <ClockIcon className="h-5 w-5 text-blue-400 cursor-pointer hover:text-blue-300" />
-              </Link>
-              <Link href="/notes">
-                <StickyNote className="h-5 w-5 text-yellow-400 cursor-pointer hover:text-yellow-300" />
-              </Link>
-              <Link href="/journal">
-                <BookOpen className="h-5 w-5 text-green-400 cursor-pointer hover:text-green-300" />
-              </Link>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Focused day - always in the first column */}
         <Card
