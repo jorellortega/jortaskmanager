@@ -14,6 +14,9 @@ import {
   eachDayOfInterval,
   isSameMonth,
   isToday,
+  startOfWeek,
+  endOfWeek,
+  isSameDay,
 } from "date-fns"
 import { supabase } from "@/lib/supabaseClient"
 
@@ -60,7 +63,9 @@ export default function CalendarPage() {
 
   const monthStart = startOfMonth(currentMonth)
   const monthEnd = endOfMonth(currentMonth)
-  const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd })
+  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 0 })
+  const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 0 })
+  const monthDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd })
 
   const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
@@ -198,10 +203,10 @@ export default function CalendarPage() {
                 <div
                   key={day.toString()}
                   className={`text-center p-2 rounded cursor-pointer min-h-[48px] flex flex-col items-center justify-start ${
-                    !isSameMonth(day, currentMonth)
-                      ? "text-gray-400"
-                      : isToday(day)
-                        ? "bg-blue-600 text-white"
+                    isToday(day)
+                      ? "bg-blue-600 text-white"
+                      : !isSameMonth(day, currentMonth)
+                        ? "text-gray-400"
                         : "text-white hover:bg-gray-700"
                   }`}
                   onClick={() => handleDateClick(day)}
