@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ArrowLeft, Trash2, AlertCircle, Calendar, Edit2, Check, Plus } from "lucide-react"
 import Link from "next/link"
-import { format, addDays, isBefore, parseISO, startOfWeek } from "date-fns"
+import { format, addDays, startOfWeek, parseISO } from "date-fns"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { supabase } from "@/lib/supabaseClient"
@@ -503,14 +503,13 @@ export default function TodoPage() {
                             <Calendar className="h-4 w-4 inline mr-1" />
                             {todo.due_date ? (
                               (() => {
-                                const d = new Date(todo.due_date)
+                                const d = parseISO(todo.due_date)
                                 const dateStr = format(d, "MMMM d")
                                 const yearStr = format(d, "yyyy")
-                                const timeStr = d.getHours() || d.getMinutes() ? format(d, "h:mm a") : null
+                                // Only show time if due_time is present (if you have it)
                                 return <>
                                   {dateStr}
                                   <span className="text-gray-500">, {yearStr}</span>
-                                  {timeStr && <span className="ml-2">{timeStr}</span>}
                                 </>
                               })()
                             ) : ""}

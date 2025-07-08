@@ -30,6 +30,7 @@ import {
   LogOut,
   Briefcase,
   Rss,
+  Trophy,
 } from "lucide-react"
 import { format, addDays, startOfWeek, parseISO } from "date-fns"
 import Link from "next/link"
@@ -72,13 +73,25 @@ type WorkPriority = {
   id: string;
   user_id: string;
   title: string;
-  due_date?: string | null;
+  due_date_only?: string | null;
+  due_datetime?: string;
+  created_at?: string;
+};
+
+type SelfDevPriority = {
+  id: string;
+  user_id: string;
+  title: string;
+  due_date_only?: string | null;
+  due_datetime?: string;
   created_at?: string;
 };
 
 const allDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 export default function WeeklyTaskManager() {
+  // Store the actual 'today' date at mount
+  const [today, setToday] = useState<Date>(() => new Date());
   const [currentDay, setCurrentDay] = useState<string>("")
   const [days, setDays] = useState<string[]>([])
   const [todos, setTodos] = useState<Todo[]>([])
@@ -86,6 +99,7 @@ export default function WeeklyTaskManager() {
   const [leisureActivities, setLeisureActivities] = useState<LeisureActivity[]>([])
   const [fitnessActivities, setFitnessActivities] = useState<FitnessActivity[]>([])
   const [workPriorities, setWorkPriorities] = useState<WorkPriority[]>([]);
+  const [selfDevPriorities, setSelfDevPriorities] = useState<SelfDevPriority[]>([]);
   const [focusedDayIndex, setFocusedDayIndex] = useState(0)
   const [userId, setUserId] = useState<string | null>(null)
   const [userName, setUserName] = useState<string | null>(null)
@@ -131,6 +145,11 @@ export default function WeeklyTaskManager() {
         .from("work_priorities")
         .select("*")
         .eq("user_id", user.id);
+      // Fetch self-development priorities
+      const { data: selfDevData, error: selfDevError } = await supabase
+        .from("self_development_priorities")
+        .select("*")
+        .eq("user_id", user.id);
       if (todosError || appointmentsError || leisureError || fitnessError) {
         setError("Failed to fetch dashboard data.")
       } else {
@@ -139,6 +158,7 @@ export default function WeeklyTaskManager() {
         setLeisureActivities(leisureData || [])
         setFitnessActivities(fitnessData || [])
         setWorkPriorities(workData || [])
+        setSelfDevPriorities(selfDevData || [])
       }
       setLoading(false)
     }
@@ -146,14 +166,16 @@ export default function WeeklyTaskManager() {
   }, [])
 
   useEffect(() => {
-    const now = new Date()
-    const dayIndex = now.getDay()
-    // Map JS Sunday (0) to 6, Monday (1) to 0, etc.
-    const todayIdx = dayIndex === 0 ? 6 : dayIndex - 1
-    setCurrentDay(allDays[todayIdx])
-    setDays(allDays) // Always Monday-Sunday
-    setFocusedDayIndex(todayIdx)
-  }, [])
+    const now = new Date();
+    setToday(now); // Store 'today' only once
+    // JS: 0 (Sun) - 6 (Sat), but our allDays starts with Monday
+    let dayIndex = now.getDay();
+    // Map Sunday (0) to 6, Monday (1) to 0, etc.
+    let idx = dayIndex === 0 ? 6 : dayIndex - 1;
+    setCurrentDay(allDays[idx]);
+    setDays(allDays); // Always Monday-Sunday
+    setFocusedDayIndex(idx); // Focus on today by default
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("appointments", JSON.stringify(appointments))
@@ -241,15 +263,30 @@ export default function WeeklyTaskManager() {
   const focusedDay = days[focusedDayIndex] || ""
   // Always map day label to correct date in current week
   function getDateForDay(day: string) {
-    const idx = allDays.indexOf(day)
-    return format(addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), idx), "yyyy-MM-dd")
+    // Use the stored 'today' date for all calculations
+    const monday = startOfWeek(today, { weekStartsOn: 1 });
+    const idx = allDays.indexOf(day);
+    return format(addDays(monday, idx), "yyyy-MM-dd");
   }
   const focusedDate = focusedDay ? getDateForDay(focusedDay) : ""
   const todosForDay = todos.filter((todo) => todo.due_date === focusedDate)
   const workPrioritiesForDay = workPriorities.filter((wp) => {
-    if (!wp.due_date) return false;
-    // Accept both date-only and date-time
-    return wp.due_date.startsWith(focusedDate);
+    // Use due_date_only if present, else due_datetime
+    if (wp.due_date_only) {
+      return wp.due_date_only === focusedDate;
+    } else if (wp.due_datetime) {
+      return wp.due_datetime.startsWith(focusedDate);
+    }
+    return false;
+  });
+
+  const selfDevPrioritiesForDay = selfDevPriorities.filter((sd) => {
+    if (sd.due_date_only) {
+      return sd.due_date_only === focusedDate;
+    } else if (sd.due_datetime) {
+      return sd.due_datetime.startsWith(focusedDate);
+    }
+    return false;
   });
 
   const handleSignOut = async () => {
@@ -258,8 +295,15 @@ export default function WeeklyTaskManager() {
   };
 
   function isCurrentDay(day: string) {
-    return day === format(new Date(), "EEEE")
+    // Use the stored 'today' date for comparison
+    return day === format(today, "EEEE");
   }
+
+  // Helper to get sidebar days in correct order, starting from the day after today
+  const sidebarDays = [
+    ...days.slice(focusedDayIndex + 1),
+    ...days.slice(0, focusedDayIndex)
+  ];
 
   return (
     <div className="container mx-auto p-4 pb-24">
@@ -276,7 +320,7 @@ export default function WeeklyTaskManager() {
               appointments.some(
                 (apt) =>
                   format(new Date(apt.date), "yyyy-MM-dd") ===
-                  format(addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), days.indexOf(focusedDay)), "yyyy-MM-dd"),
+                  format(addDays(startOfWeek(today, { weekStartsOn: 1 }), days.indexOf(focusedDay)), "yyyy-MM-dd"),
               )
                 ? "border-4 border-transparent bg-gradient-to-r from-red-500 via-red-400 to-red-300 p-[1px]"
                 : "border-4 border-transparent bg-gradient-to-r from-green-500 via-green-400 to-green-300 p-[1px]"
@@ -308,9 +352,12 @@ export default function WeeklyTaskManager() {
                   {workPrioritiesForDay.length > 0 && (
                     <Briefcase className="h-5 w-5 text-blue-400" />
                   )}
+                 {selfDevPrioritiesForDay.length > 0 && (
+                   <Trophy className="h-5 w-5 text-yellow-400" />
+                 )}
                 </div>
                 <span className="text-xs text-gray-300">
-                  {focusedDate ? format(new Date(focusedDate), "MMM d, yyyy") : ""}
+                  {focusedDate ? format(parseISO(focusedDate), "MMM d, yyyy") : ""}
                 </span>
               </CardTitle>
             </CardHeader>
@@ -356,7 +403,7 @@ export default function WeeklyTaskManager() {
                   <h3 className="text-red-500 font-semibold mb-2">Appointments:</h3>
                   <ul className="list-disc list-inside">
                     {appointments
-                      .filter((apt) => format(new Date(apt.date), "yyyy-MM-dd") === focusedDate)
+                      .filter((apt) => format(parseISO(apt.date), "yyyy-MM-dd") === focusedDate)
                       .map((apt) => (
                         <li key={apt.id} className="text-white flex items-center">
                           <Clock className="h-4 w-4 text-red-500 mr-2 inline" />
@@ -414,6 +461,20 @@ export default function WeeklyTaskManager() {
                   </ul>
                 </div>
               )}
+              {selfDevPrioritiesForDay.length > 0 && (
+                <div className="mt-4">
+                  <h3 className="text-yellow-400 font-semibold mb-2 flex items-center">
+                    <Trophy className="w-5 h-5 mr-2" /> Self-Development Priorities:
+                  </h3>
+                  <ul className="list-disc list-inside">
+                    {selfDevPrioritiesForDay.map((sd) => (
+                      <li key={sd.id} className="text-white">
+                        {sd.title}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <Button onClick={() => addTask(focusedDay)} className="w-full" disabled={addingTask}>
                 Add Task
               </Button>
@@ -423,44 +484,53 @@ export default function WeeklyTaskManager() {
 
         {/* Other days - in the third column */}
         <div className="space-y-4">
-          {days
-            .filter((day) => day !== focusedDay)
-            .map((day) => (
-              <Card
-                key={day}
-                className="bg-[#141415] border border-gray-700 cursor-pointer hover:bg-[#1a1a1b] transition-colors"
-                onClick={() => handleDayClick(day)}
-              >
-                <div className="h-full w-full bg-[#141415] p-2 max-h-[150px] overflow-y-auto">
-                  <CardHeader className="p-1 bg-black">
-                    {/* Update the other days cards to show the leisure icon: */}
-                    <CardTitle className="flex justify-between items-center text-white">
-                      <div className="flex items-center">
-                        {appointments.some(
-                          (apt) =>
-                            format(new Date(apt.date), "yyyy-MM-dd") === getDateForDay(day),
-                        ) && <Clock className="h-4 w-4 text-red-500 mr-2" />}
-                        {leisureActivities.some(
-                          (activity) => activity.activity_date === getDateForDay(day),
-                        ) && <Sun className="h-4 w-4 text-yellow-400 mr-2" />}
-                        {fitnessActivities.some(
-                          (activity) => activity.activity_date === getDateForDay(day),
-                        ) && <Dumbbell className="h-4 w-4 text-green-400 mr-2" />}
-                        {day.toUpperCase()}
-                      </div>
-                      <span className="text-xs text-gray-300">
-                        {format(new Date(getDateForDay(day)), "MMM d, yyyy")}
-                      </span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-1">
-                    <p className="text-sm text-gray-400 flex items-center justify-center h-full">
-                      {todos.filter((todo) => todo.due_date === getDateForDay(day)).length} task(s)
-                    </p>
-                  </CardContent>
-                </div>
-              </Card>
-            ))}
+          {sidebarDays.map((day) => {
+              const dateStr = getDateForDay(day);
+              const numTasksForDay =
+                todos.filter((todo) => todo.due_date === dateStr).length +
+                workPriorities.filter((wp) => wp.due_date_only && wp.due_date_only === dateStr).length +
+                appointments.filter((apt) => format(parseISO(apt.date), "yyyy-MM-dd") === dateStr).length +
+                fitnessActivities.filter((fa) => fa.activity_date === dateStr).length +
+                leisureActivities.filter((la) => la.activity_date === dateStr).length;
+             const selfDevForDay = selfDevPriorities.filter((sd) => sd.due_date_only && sd.due_date_only === dateStr);
+              return (
+                <Card
+                  key={day}
+                  className="bg-[#141415] border border-gray-700 cursor-pointer hover:bg-[#1a1a1b] transition-colors"
+                  onClick={() => handleDayClick(day)}
+                >
+                  <div className="h-full w-full bg-[#141415] p-2 max-h-[150px] overflow-y-auto">
+                    <CardHeader className="p-1 bg-black">
+                      {/* Update the other days cards to show the leisure icon: */}
+                      <CardTitle className="flex justify-between items-center text-white">
+                        <div className="flex items-center">
+                          {appointments.some(
+                            (apt) =>
+                              format(parseISO(apt.date), "yyyy-MM-dd") === getDateForDay(day),
+                          ) && <Clock className="h-4 w-4 text-red-500 mr-2" />}
+                          {leisureActivities.some(
+                            (activity) => activity.activity_date === getDateForDay(day),
+                          ) && <Sun className="h-4 w-4 text-yellow-400 mr-2" />}
+                          {fitnessActivities.some(
+                            (activity) => activity.activity_date === getDateForDay(day),
+                          ) && <Dumbbell className="h-4 w-4 text-green-400 mr-2" />}
+                         {selfDevForDay.length > 0 && <Trophy className="h-4 w-4 text-yellow-400 mr-2" />}
+                          {day.toUpperCase()}
+                        </div>
+                        <span className="text-xs text-gray-300">
+                          {format(parseISO(getDateForDay(day)), "MMM d, yyyy")}
+                        </span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-1">
+                      <p className="text-sm text-gray-400 flex items-center justify-center h-full">
+                        {numTasksForDay} task(s)
+                      </p>
+                    </CardContent>
+                  </div>
+                </Card>
+              )
+            })}
         </div>
       </div>
       <p className="text-center text-xs text-gray-500 mt-8">Developed by JOR powered by Covion Studio</p>

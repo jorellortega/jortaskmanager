@@ -8,20 +8,32 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { ArrowLeft, Briefcase, Trash2, Calendar as CalendarIcon, Edit2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { format, parseISO } from "date-fns"
 
 export type WorkPriority = {
   id: string;
   user_id: string;
   title: string;
-  due_date?: string | null;
+  due_date_only?: string | null;
+  due_datetime?: string | null;
   created_at?: string;
 };
+
+// Helper to format due_date correctly (avoiding UTC shift for date-only strings)
+function formatDueDateOnly(dateOnly: string) {
+  if (!dateOnly) return null;
+  return format(parseISO(dateOnly), "MMMM d, yyyy");
+}
+function formatDueDateTime(dateTime: string) {
+  if (!dateTime) return null;
+  return new Date(dateTime).toLocaleString();
+}
 
 export default function WorkPage() {
   const [priorities, setPriorities] = useState<WorkPriority[]>([]);
   const [newPriority, setNewPriority] = useState("");
-  const [newDueDate, setNewDueDate] = useState(""); // for date only
-  const [newDueTime, setNewDueTime] = useState(""); // for time only
+  const [newDueDateOnly, setNewDueDateOnly] = useState("");
+  const [newDueTime, setNewDueTime] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -66,31 +78,25 @@ export default function WorkPage() {
     }
     if (newPriority.trim()) {
       setLoading(true);
-      // Combine date and time if both are present
-      let dueDateValue = null;
-      if (newDueDate) {
-        if (newDueTime) {
-          dueDateValue = `${newDueDate}T${newDueTime}`;
-        } else {
-          dueDateValue = newDueDate;
-        }
+      let insertObj: any = {
+        user_id: userId,
+        title: newPriority.trim(),
+      };
+      if (newDueDateOnly && !newDueTime) {
+        insertObj.due_date_only = newDueDateOnly;
+      } else if (newDueDateOnly && newDueTime) {
+        insertObj.due_datetime = `${newDueDateOnly}T${newDueTime}`;
       }
       const { data, error: insertError } = await supabase
         .from("work_priorities")
-        .insert([
-          {
-            user_id: userId,
-            title: newPriority.trim(),
-            due_date: dueDateValue,
-          },
-        ])
+        .insert([insertObj])
         .select();
       if (insertError) {
         setError(insertError.message || "Failed to add work priority. Please try again.");
       } else if (data && data.length > 0) {
         setPriorities((prev) => [...prev, data[0]]);
         setNewPriority("");
-        setNewDueDate("");
+        setNewDueDateOnly("");
         setNewDueTime("");
       } else {
         setError("No data returned from Supabase. Check your table schema and required fields.");
@@ -117,8 +123,11 @@ export default function WorkPage() {
   const startEdit = (priority: WorkPriority) => {
     setEditingId(priority.id);
     setEditTitle(priority.title);
-    if (priority.due_date) {
-      const dt = new Date(priority.due_date);
+    if (priority.due_date_only) {
+      setEditDate(priority.due_date_only);
+      setEditTime("");
+    } else if (priority.due_datetime) {
+      const dt = new Date(priority.due_datetime);
       setEditDate(dt.toISOString().slice(0, 10));
       setEditTime(dt.toISOString().slice(11, 16));
     } else {
@@ -137,17 +146,15 @@ export default function WorkPage() {
   const saveEdit = async (id: string) => {
     setError(null);
     setLoading(true);
-    let dueDateValue = null;
-    if (editDate) {
-      if (editTime) {
-        dueDateValue = `${editDate}T${editTime}`;
-      } else {
-        dueDateValue = editDate;
-      }
+    let updateObj: any = { title: editTitle.trim(), due_date_only: null, due_datetime: null };
+    if (editDate && !editTime) {
+      updateObj.due_date_only = editDate;
+    } else if (editDate && editTime) {
+      updateObj.due_datetime = `${editDate}T${editTime}`;
     }
     const { data, error: updateError } = await supabase
       .from("work_priorities")
-      .update({ title: editTitle.trim(), due_date: dueDateValue })
+      .update(updateObj)
       .eq("id", id)
       .select();
     if (updateError) {
@@ -202,13 +209,13 @@ export default function WorkPage() {
                 <Input
                   id="due-date"
                   type="date"
-                  value={newDueDate}
-                  onChange={(e) => setNewDueDate(e.target.value)}
+                  value={newDueDateOnly}
+                  onChange={(e) => setNewDueDateOnly(e.target.value)}
                   className="bg-[#1A1A1B] border-gray-700 !text-white !placeholder:text-gray-400 w-auto"
                   placeholder="Optional date"
                   style={{ minWidth: 0 }}
                 />
-                {newDueDate && (
+                {newDueDateOnly && (
                   <Input
                     id="due-time"
                     type="time"
@@ -271,10 +278,16 @@ export default function WorkPage() {
                    <>
                      <span>
                        {priority.title}
-                       {priority.due_date && (
+                       {priority.due_date_only && (
                          <span className="ml-2 text-gray-400 text-xs flex items-center">
                            <CalendarIcon className="w-4 h-4 mr-1" />
-                           {new Date(priority.due_date).toLocaleString()}
+                           {formatDueDateOnly(priority.due_date_only)}
+                         </span>
+                       )}
+                       {priority.due_datetime && (
+                         <span className="ml-2 text-gray-400 text-xs flex items-center">
+                           <CalendarIcon className="w-4 h-4 mr-1" />
+                           {formatDueDateTime(priority.due_datetime)}
                          </span>
                        )}
                      </span>
