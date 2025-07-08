@@ -1,14 +1,16 @@
 "use client";
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { CalendarDays, Clock, DollarSign, Briefcase, Sun, Utensils, Dumbbell, Cake, Repeat, CheckSquare, Target, Users, Lightbulb, Plane, Clock as ClockIcon, StickyNote, BookOpen, LayoutDashboard } from 'lucide-react';
+import { CalendarDays, Clock, DollarSign, Briefcase, Sun, Utensils, Dumbbell, Cake, Repeat, CheckSquare, Target, Users, Lightbulb, Plane, Clock as ClockIcon, StickyNote, BookOpen, LayoutDashboard, Monitor, Award } from 'lucide-react';
 
 const navIcons = [
   { href: '/dashboard', icon: <LayoutDashboard />, color: 'text-blue-400', glow: '#3b82f6' },
   { href: '/calendar', icon: <CalendarDays />, color: 'text-blue-400', glow: '#3b82f6' },
   { href: '/appointments', icon: <Clock />, color: 'text-blue-400', glow: '#3b82f6' },
   { href: '/expenses', icon: <DollarSign />, color: 'text-green-400', glow: '#22c55e' },
+  { href: '/work', icon: <Monitor />, color: 'text-green-400', glow: '#22c55e' },
   { href: '/business', icon: <Briefcase />, color: 'text-gray-200', glow: '#22c55e' },
+  { href: '/selfdevelopment', icon: <Award />, color: 'text-yellow-400', glow: '#fde047' },
   { href: '/leisure', icon: <Sun />, color: 'text-yellow-400', glow: '#fde047' },
   { href: '/meal-planning', icon: <Utensils />, color: 'text-orange-400', glow: '#fb923c' },
   { href: '/fitness', icon: <Dumbbell />, color: 'text-green-400', glow: '#22c55e' },

@@ -68,6 +68,14 @@ type FitnessActivity = {
   completed: boolean
 }
 
+type WorkPriority = {
+  id: string;
+  user_id: string;
+  title: string;
+  due_date?: string | null;
+  created_at?: string;
+};
+
 const allDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 export default function WeeklyTaskManager() {
@@ -77,6 +85,7 @@ export default function WeeklyTaskManager() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [leisureActivities, setLeisureActivities] = useState<LeisureActivity[]>([])
   const [fitnessActivities, setFitnessActivities] = useState<FitnessActivity[]>([])
+  const [workPriorities, setWorkPriorities] = useState<WorkPriority[]>([]);
   const [focusedDayIndex, setFocusedDayIndex] = useState(0)
   const [userId, setUserId] = useState<string | null>(null)
   const [userName, setUserName] = useState<string | null>(null)
@@ -117,6 +126,11 @@ export default function WeeklyTaskManager() {
         .from("fitness_activities")
         .select("*")
         .eq("user_id", user.id)
+      // Fetch work priorities
+      const { data: workData, error: workError } = await supabase
+        .from("work_priorities")
+        .select("*")
+        .eq("user_id", user.id);
       if (todosError || appointmentsError || leisureError || fitnessError) {
         setError("Failed to fetch dashboard data.")
       } else {
@@ -124,6 +138,7 @@ export default function WeeklyTaskManager() {
         setAppointments(appointmentsData || [])
         setLeisureActivities(leisureData || [])
         setFitnessActivities(fitnessData || [])
+        setWorkPriorities(workData || [])
       }
       setLoading(false)
     }
@@ -231,6 +246,11 @@ export default function WeeklyTaskManager() {
   }
   const focusedDate = focusedDay ? getDateForDay(focusedDay) : ""
   const todosForDay = todos.filter((todo) => todo.due_date === focusedDate)
+  const workPrioritiesForDay = workPriorities.filter((wp) => {
+    if (!wp.due_date) return false;
+    // Accept both date-only and date-time
+    return wp.due_date.startsWith(focusedDate);
+  });
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -285,6 +305,9 @@ export default function WeeklyTaskManager() {
                   {fitnessActivities.some(
                     (activity) => activity.activity_date === focusedDate,
                   ) && <Dumbbell className="h-5 w-5 text-green-400" />}
+                  {workPrioritiesForDay.length > 0 && (
+                    <Briefcase className="h-5 w-5 text-blue-400" />
+                  )}
                 </div>
                 <span className="text-xs text-gray-300">
                   {focusedDate ? format(new Date(focusedDate), "MMM d, yyyy") : ""}
@@ -377,6 +400,20 @@ export default function WeeklyTaskManager() {
                   </ul>
                 </div>
               )}
+              {workPrioritiesForDay.length > 0 && (
+                <div className="mt-4">
+                  <h3 className="text-blue-400 font-semibold mb-2 flex items-center">
+                    <Briefcase className="w-5 h-5 mr-2" /> Work Priorities:
+                  </h3>
+                  <ul className="list-disc list-inside">
+                    {workPrioritiesForDay.map((wp) => (
+                      <li key={wp.id} className="text-white">
+                        {wp.title}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <Button onClick={() => addTask(focusedDay)} className="w-full" disabled={addingTask}>
                 Add Task
               </Button>
@@ -412,7 +449,7 @@ export default function WeeklyTaskManager() {
                         {day.toUpperCase()}
                       </div>
                       <span className="text-xs text-gray-300">
-                        {focusedDate ? format(new Date(focusedDate), "MMM d, yyyy") : ""}
+                        {format(new Date(getDateForDay(day)), "MMM d, yyyy")}
                       </span>
                     </CardTitle>
                   </CardHeader>

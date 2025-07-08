@@ -154,11 +154,11 @@ export default function WorkClockPage() {
       </h1>
       <Card className="bg-[#141415] border border-gray-700 mb-4">
         <CardHeader>
-          <CardTitle className="text-white">Clock In/Out</CardTitle>
+          <CardTitle className="!text-white">Clock In/Out</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-center mb-4">
-            <h2 className="text-3xl font-bold">{formatTime(elapsedTime)}</h2>
+            <h2 className="text-3xl font-bold !text-white">{formatTime(elapsedTime)}</h2>
           </div>
           {isClockingIn ? (
             <Button onClick={handleClockOut} className="w-full bg-red-500 hover:bg-red-600 text-white">
@@ -173,20 +173,20 @@ export default function WorkClockPage() {
       </Card>
       <Card className="bg-[#141415] border border-gray-700 mb-4">
         <CardHeader>
-          <CardTitle className="text-white">Work Summary</CardTitle>
+          <CardTitle className="!text-white">Work Summary</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-lg mb-2">Total Hours Worked: {getTotalHours()} hours</p>
-          <p className="text-lg">Total Days Worked: {workSessions.length} days</p>
+          <p className="text-lg mb-2 !text-white">Total Hours Worked: {getTotalHours()} hours</p>
+          <p className="text-lg !text-white">Total Days Worked: {workSessions.length} days</p>
         </CardContent>
       </Card>
       <Card className="bg-[#141415] border border-gray-700">
         <CardHeader>
-          <CardTitle className="text-white">Work History</CardTitle>
+          <CardTitle className="!text-white">Work History</CardTitle>
         </CardHeader>
         <CardContent>
           {workSessions.length === 0 ? (
-            <p>No work sessions recorded yet.</p>
+            <p className="!text-white">No work sessions recorded yet.</p>
           ) : (
             <ul className="space-y-2">
               {workSessions.map((session) => {
@@ -194,15 +194,15 @@ export default function WorkClockPage() {
                   ? differenceInSeconds(new Date(session.clock_out), new Date(session.clock_in))
                   : null
                 return (
-                  <li key={session.id} className="flex justify-between items-center bg-[#1A1A1B] p-2 rounded">
+                  <li key={session.id} className="flex justify-between items-center bg-[#1A1A1B] p-2 rounded !text-white">
                     <div>
-                      <p className="font-semibold">{format(new Date(session.clock_in), "MMM d, yyyy")}</p>
-                      <p className="text-sm text-white">
+                      <p className="font-semibold !text-white">{format(new Date(session.clock_in), "MMM d, yyyy")}</p>
+                      <p className="text-sm !text-white">
                         {format(new Date(session.clock_in), "HH:mm")} -{" "}
                         {session.clock_out ? format(new Date(session.clock_out), "HH:mm") : "In Progress"}
                       </p>
                     </div>
-                    <p className="font-bold">
+                    <p className="font-bold !text-white">
                       {duration ? `${(duration / 3600).toFixed(2)} hours` : "In Progress"}
                     </p>
                   </li>
