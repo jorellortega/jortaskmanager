@@ -113,43 +113,44 @@ export default function AppointmentsPage() {
         <ArrowLeft className="mr-2" /> Back to Dashboard
       </Link>
       <h1 className="text-2xl font-bold mb-4">Appointments</h1>
-      <Card className="bg-gray-800 border border-gray-700 mb-4 p-4">
+      <Card className="bg-[#141415] border border-gray-700 mb-4 p-4">
         <CardHeader>
-          <CardTitle>Add New Appointment</CardTitle>
+          <CardTitle className="!text-white">Add New Appointment</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={addAppointment} className="space-y-4">
             <div>
-              <Label htmlFor="title">Title</Label>
+              <Label htmlFor="title" className="text-white">Title</Label>
               <Input
                 id="title"
                 value={newAppointment.title}
                 onChange={(e) => setNewAppointment({ ...newAppointment, title: e.target.value })}
-                className="bg-gray-700 text-white"
+                className="bg-[#1A1A1B] border-gray-700 !text-white !placeholder:text-gray-400"
+                placeholder="Enter appointment title"
               />
             </div>
             <div>
-              <Label htmlFor="date">Date</Label>
+              <Label htmlFor="date" className="text-white">Date</Label>
               <Input
                 id="date"
                 type="date"
                 value={newAppointment.date}
                 onChange={(e) => setNewAppointment({ ...newAppointment, date: e.target.value })}
-                className="bg-gray-700 text-white"
+                className="bg-[#1A1A1B] border-gray-700 !text-white !placeholder:text-gray-400"
               />
             </div>
             <div>
-              <Label htmlFor="time">Time</Label>
+              <Label htmlFor="time" className="text-white">Time</Label>
               <Select
                 value={newAppointment.time}
                 onValueChange={(value) => setNewAppointment({ ...newAppointment, time: value })}
               >
-                <SelectTrigger id="time" className="bg-gray-700 text-white w-full rounded px-3 py-2">
-                  <SelectValue placeholder="Select a time" />
+                <SelectTrigger id="time" className="bg-[#1A1A1B] border-gray-700 !text-white w-full rounded px-3 py-2">
+                  <SelectValue placeholder="Select a time" className="!text-white !placeholder:text-gray-400" />
                 </SelectTrigger>
                 <SelectContent>
                   {timeOptions.map(({ display, value }) => (
-                    <SelectItem key={value} value={value}>
+                    <SelectItem key={value} value={value} className="!text-white">
                       {display}
                     </SelectItem>
                   ))}
@@ -160,9 +161,9 @@ export default function AppointmentsPage() {
           </form>
         </CardContent>
       </Card>
-      <Card className="bg-gray-800 border border-gray-700">
+      <Card className="bg-[#141415] border border-gray-700">
         <CardHeader>
-          <CardTitle>Your Appointments</CardTitle>
+          <CardTitle className="!text-white">Your Appointments</CardTitle>
         </CardHeader>
         <CardContent>
           {appointments.length === 0 ? (
@@ -170,7 +171,7 @@ export default function AppointmentsPage() {
           ) : (
             <ul className="space-y-2">
               {appointments.map((appointment) => (
-                <li key={appointment.id} className="bg-gray-700 p-2 rounded">
+                <li key={appointment.id} className="bg-[#1A1A1B] p-2 rounded !text-white">
                   <strong>{appointment.title}</strong> - {format(new Date(appointment.date), "MMM d, yyyy")} at{" "}
                   {appointment.time}
                 </li>

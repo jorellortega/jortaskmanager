@@ -57,7 +57,7 @@ export default function Home() {
         <header>
           <div className="flex justify-center mt-16 mb-10">
             <div className="bg-[#18181A] border border-green-700 rounded-xl shadow-lg p-8 max-w-xl w-full text-center">
-              <h1 className="text-3xl font-extrabold mb-2 text-green-400 flex items-center justify-center gap-2">
+              <h1 className="text-3xl font-extrabold mb-2 flex items-center justify-center gap-2 bg-gradient-to-r from-white via-green-300 to-green-500 text-transparent bg-clip-text">
                 JOR TASK MANAGER
               </h1>
               <p className="text-green-200 text-lg mb-2 font-medium">
@@ -68,7 +68,7 @@ export default function Home() {
           <div className="flex justify-center mb-10">
             <Link
               href="/auth"
-              className="inline-block px-8 py-4 rounded-full text-lg font-bold text-white bg-gradient-to-r from-green-400 via-green-500 to-green-600 shadow-lg hover:from-green-500 hover:to-green-700 transition-all duration-200 border-2 border-green-500 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2"
+              className="inline-block px-8 py-4 rounded-full text-lg font-bold text-white bg-gradient-to-r from-white via-green-300 to-green-500 shadow-lg hover:from-white hover:via-green-400 hover:to-green-600 hover:shadow-[0_0_16px_#22c55e] focus:shadow-[0_0_16px_#22c55e] transition-all duration-200 border-2 border-green-500 focus:outline-none focus:ring-4 focus:ring-green-300 focus:ring-offset-2"
             >
               Login / Sign Up
             </Link>

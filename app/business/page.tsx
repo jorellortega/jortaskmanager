@@ -160,9 +160,9 @@ export default function BusinessPage() {
         <ArrowLeft className="mr-2" /> Back to Dashboard
       </Link>
       <h1 className="text-2xl font-bold mb-4 bg-gradient-to-r from-green-400 via-white to-green-600 text-transparent bg-clip-text">Business</h1>
-      <Card className="bg-gray-800 border border-gray-700 mb-4 p-4">
+      <Card className="bg-[#141415] border border-gray-700 mb-4 p-4">
         <CardHeader>
-          <CardTitle>Business Projects</CardTitle>
+          <CardTitle className="!text-white">Business Projects</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={addProject} className="flex gap-2 mb-6">
@@ -171,15 +171,15 @@ export default function BusinessPage() {
               value={newProject}
               onChange={e => setNewProject(e.target.value)}
               placeholder="Add a new project"
-              className="bg-gray-700 text-white"
+              className="bg-[#1A1A1B] border-gray-700 !text-white placeholder:text-gray-400"
             />
             <Button type="submit">Add Project</Button>
           </form>
           <div className="space-y-4">
             {projects.map(project => (
-              <div key={project.id} className="bg-gray-700 rounded p-4">
+              <div key={project.id} className="bg-[#1A1A1B] rounded p-4">
                 <div className="flex items-center justify-between cursor-pointer" onClick={() => toggleProjectExpand(project.id)}>
-                  <span className="font-semibold text-lg flex items-center">
+                  <span className="font-semibold text-lg flex items-center !text-white">
                     {expanded[project.id] ? <ChevronDown className="h-5 w-5 mr-1" /> : <ChevronRight className="h-5 w-5 mr-1" />}
                     {project.name}
                   </span>
@@ -193,15 +193,15 @@ export default function BusinessPage() {
                         value={newTask[project.id] || ""}
                         onChange={e => setNewTask(nt => ({ ...nt, [project.id]: e.target.value }))}
                         placeholder="Add a new task"
-                        className="bg-gray-800 text-white"
+                        className="bg-[#141415] border-gray-700 !text-white placeholder:text-gray-400"
                       />
                       <Button type="submit">Add Task</Button>
                     </form>
                     <ul className="space-y-2">
                       {tasks.filter(t => t.project_id === project.id).map(task => (
-                        <li key={task.id} className="flex items-center gap-2 bg-gray-800 rounded p-2">
+                        <li key={task.id} className="flex items-center gap-2 bg-[#141415] rounded p-2 !text-white">
                           <Checkbox checked={task.completed} onCheckedChange={() => toggleTask(task)} />
-                          <span className={task.completed ? "line-through text-gray-400" : ""}>{task.task}</span>
+                          <span className={task.completed ? "line-through text-gray-400" : "!text-white"}>{task.task}</span>
                           <Button size="icon" variant="ghost" onClick={() => deleteTask(task.id)}>
                             <Trash2 className="h-4 w-4 text-red-400" />
                           </Button>

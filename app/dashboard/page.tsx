@@ -437,7 +437,7 @@ export default function WeeklyTaskManager() {
             <Rss className="h-6 w-6 mb-1" />
             <span className="text-xs">Feed</span>
           </Link>
-          <Link href="/auth" className="flex flex-col items-center text-gray-300 hover:text-blue-400 transition">
+          <Link href="/account" className="flex flex-col items-center text-gray-300 hover:text-blue-400 transition">
             <UserIcon className="h-6 w-6 mb-1" />
             <span className="text-xs">Account</span>
           </Link>
@@ -445,10 +445,17 @@ export default function WeeklyTaskManager() {
             <Settings className="h-6 w-6 mb-1" />
             <span className="text-xs">Settings</span>
           </Link>
-          <button onClick={handleSignOut} className="flex flex-col items-center text-gray-300 hover:text-red-400 transition focus:outline-none">
-            <LogOut className="h-6 w-6 mb-1" />
-            <span className="text-xs">Sign Out</span>
-          </button>
+          {userId ? (
+            <button onClick={handleSignOut} className="flex flex-col items-center text-gray-300 hover:text-red-400 transition focus:outline-none">
+              <LogOut className="h-6 w-6 mb-1" />
+              <span className="text-xs">Sign Out</span>
+            </button>
+          ) : (
+            <Link href="/auth" className="flex flex-col items-center text-gray-300 hover:text-green-400 transition">
+              <LogOut className="h-6 w-6 mb-1" />
+              <span className="text-xs">Sign In</span>
+            </Link>
+          )}
         </div>
       </nav>
       {error && <div className="bg-red-900 text-red-200 p-2 mb-4 rounded">{error}</div>}
