@@ -12,6 +12,7 @@ import { ArrowLeft, Plane, Calendar, MapPin, Trash2, Edit2, Plus } from "lucide-
 import Link from "next/link"
 import { format } from "date-fns"
 import { supabase } from "@/lib/supabaseClient"
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 type TravelPlan = {
   id: string
@@ -19,6 +20,8 @@ type TravelPlan = {
   destination: string
   start_date: string
   end_date: string
+  start_time?: string | null
+  end_time?: string | null
   notes: string | null
   created_at: string
 }
@@ -36,6 +39,10 @@ export default function TravelPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
+  const [newStartTime, setNewStartTime] = useState("");
+  const [newEndTime, setNewEndTime] = useState("");
+  const [editedStartTime, setEditedStartTime] = useState("");
+  const [editedEndTime, setEditedEndTime] = useState("");
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -80,6 +87,8 @@ export default function TravelPage() {
             destination: newPlan.destination,
             start_date: newPlan.start_date,
             end_date: newPlan.end_date,
+            start_time: newStartTime || null,
+            end_time: newEndTime || null,
             notes: newPlan.notes || null,
           },
         ])
@@ -89,6 +98,8 @@ export default function TravelPage() {
       } else if (data && data.length > 0) {
         setTravelPlans((prev) => [...prev, data[0]])
         setNewPlan({ destination: "", start_date: "", end_date: "", notes: "" })
+        setNewStartTime("")
+        setNewEndTime("")
       }
       setLoading(false)
     }
@@ -102,6 +113,8 @@ export default function TravelPage() {
       end_date: plan.end_date,
       notes: plan.notes || "",
     })
+    setEditedStartTime(plan.start_time || "");
+    setEditedEndTime(plan.end_time || "");
   }
 
   const updatePlan = async (id: string, updatedPlan: { destination: string; start_date: string; end_date: string; notes: string }) => {
@@ -113,6 +126,8 @@ export default function TravelPage() {
         destination: updatedPlan.destination,
         start_date: updatedPlan.start_date,
         end_date: updatedPlan.end_date,
+        start_time: editedStartTime || null,
+        end_time: editedEndTime || null,
         notes: updatedPlan.notes || null,
       })
       .eq("id", id)
@@ -185,6 +200,29 @@ export default function TravelPage() {
                   className="bg-[#1A1A1B] border-gray-700 text-white"
                   required
                 />
+                <Select
+                  value={newStartTime}
+                  onValueChange={setNewStartTime}
+                >
+                  <SelectTrigger id="start_time" className="bg-[#1A1A1B] border-gray-700 text-white w-full rounded px-3 py-2 mt-1">
+                    <SelectValue placeholder="Select a start time (optional)" className="!text-white !placeholder:text-gray-400" />
+                  </SelectTrigger>
+                  <SelectContent className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                    {Array.from({ length: 24 * 2 }, (_, i) => {
+                      const hour24 = Math.floor(i / 2);
+                      const min = i % 2 === 0 ? '00' : '30';
+                      const hour12 = ((hour24 + 11) % 12) + 1;
+                      const ampm = hour24 < 12 ? 'AM' : 'PM';
+                      const display = `${hour12.toString().padStart(2, '0')}:${min} ${ampm}`;
+                      const value = `${hour24.toString().padStart(2, '0')}:${min}`;
+                      return (
+                        <SelectItem key={value} value={value} className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                          {display}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="flex-1">
                 <Label htmlFor="end_date" className="text-white">
@@ -198,6 +236,29 @@ export default function TravelPage() {
                   className="bg-[#1A1A1B] border-gray-700 text-white"
                   required
                 />
+                <Select
+                  value={newEndTime}
+                  onValueChange={setNewEndTime}
+                >
+                  <SelectTrigger id="end_time" className="bg-[#1A1A1B] border-gray-700 text-white w-full rounded px-3 py-2 mt-1">
+                    <SelectValue placeholder="Select an end time (optional)" className="!text-white !placeholder:text-gray-400" />
+                  </SelectTrigger>
+                  <SelectContent className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                    {Array.from({ length: 24 * 2 }, (_, i) => {
+                      const hour24 = Math.floor(i / 2);
+                      const min = i % 2 === 0 ? '00' : '30';
+                      const hour12 = ((hour24 + 11) % 12) + 1;
+                      const ampm = hour24 < 12 ? 'AM' : 'PM';
+                      const display = `${hour12.toString().padStart(2, '0')}:${min} ${ampm}`;
+                      const value = `${hour24.toString().padStart(2, '0')}:${min}`;
+                      return (
+                        <SelectItem key={value} value={value} className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                          {display}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div>
@@ -244,6 +305,29 @@ export default function TravelPage() {
                       onChange={(e) => setEditedPlan({ ...editedPlan, start_date: e.target.value })}
                       className="bg-[#1A1A1B] border-gray-700 text-white"
                     />
+                    <Select
+                      value={editedStartTime}
+                      onValueChange={setEditedStartTime}
+                    >
+                      <SelectTrigger id="edit-start-time" className="bg-[#1A1A1B] border-gray-700 text-white w-full rounded px-3 py-2 mt-1">
+                        <SelectValue placeholder="Select a start time (optional)" className="!text-white !placeholder:text-gray-400" />
+                      </SelectTrigger>
+                      <SelectContent className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                        {Array.from({ length: 24 * 2 }, (_, i) => {
+                          const hour24 = Math.floor(i / 2);
+                          const min = i % 2 === 0 ? '00' : '30';
+                          const hour12 = ((hour24 + 11) % 12) + 1;
+                          const ampm = hour24 < 12 ? 'AM' : 'PM';
+                          const display = `${hour12.toString().padStart(2, '0')}:${min} ${ampm}`;
+                          const value = `${hour24.toString().padStart(2, '0')}:${min}`;
+                          return (
+                            <SelectItem key={value} value={value} className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                              {display}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
                     <Input
                       name="end_date"
                       type="date"
@@ -251,6 +335,29 @@ export default function TravelPage() {
                       onChange={(e) => setEditedPlan({ ...editedPlan, end_date: e.target.value })}
                       className="bg-[#1A1A1B] border-gray-700 text-white"
                     />
+                    <Select
+                      value={editedEndTime}
+                      onValueChange={setEditedEndTime}
+                    >
+                      <SelectTrigger id="edit-end-time" className="bg-[#1A1A1B] border-gray-700 text-white w-full rounded px-3 py-2 mt-1">
+                        <SelectValue placeholder="Select an end time (optional)" className="!text-white !placeholder:text-gray-400" />
+                      </SelectTrigger>
+                      <SelectContent className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                        {Array.from({ length: 24 * 2 }, (_, i) => {
+                          const hour24 = Math.floor(i / 2);
+                          const min = i % 2 === 0 ? '00' : '30';
+                          const hour12 = ((hour24 + 11) % 12) + 1;
+                          const ampm = hour24 < 12 ? 'AM' : 'PM';
+                          const display = `${hour12.toString().padStart(2, '0')}:${min} ${ampm}`;
+                          const value = `${hour24.toString().padStart(2, '0')}:${min}`;
+                          return (
+                            <SelectItem key={value} value={value} className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                              {display}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <Textarea
                     name="notes"
@@ -272,7 +379,11 @@ export default function TravelPage() {
                   </h2>
                   <p className="text-sm text-white mb-2 flex items-center">
                     <Calendar className="mr-2" />
-                    {format(new Date(plan.start_date), "MMM d, yyyy")} - {format(new Date(plan.end_date), "MMM d, yyyy")}
+                    {format(new Date(plan.start_date), "MMM d, yyyy")}
+                    {plan.start_time && <span className="ml-2">at {plan.start_time}</span>}
+                    {" - "}
+                    {format(new Date(plan.end_date), "MMM d, yyyy")}
+                    {plan.end_time && <span className="ml-2">at {plan.end_time}</span>}
                   </p>
                   <p className="text-white mb-4">{plan.notes}</p>
                   <div className="flex justify-end space-x-2">

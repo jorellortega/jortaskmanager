@@ -198,8 +198,8 @@ export default function WorkClockPage() {
                     <div>
                       <p className="font-semibold !text-white">{format(new Date(session.clock_in), "MMM d, yyyy")}</p>
                       <p className="text-sm !text-white">
-                        {format(new Date(session.clock_in), "HH:mm")} -{" "}
-                        {session.clock_out ? format(new Date(session.clock_out), "HH:mm") : "In Progress"}
+                        {format(new Date(session.clock_in), "hh:mm a")} -{" "}
+                        {session.clock_out ? format(new Date(session.clock_out), "hh:mm a") : "In Progress"}
                       </p>
                     </div>
                     <p className="font-bold !text-white">

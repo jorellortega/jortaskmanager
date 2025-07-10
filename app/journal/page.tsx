@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Calendar } from "@/components/ui/calendar"
 import { format } from "date-fns"
+import { parseISO } from "date-fns";
 import Link from "next/link"
-import { Home, Trash2, Edit2, ArrowLeft } from "lucide-react"
+import { Home, Trash2, Edit2, ArrowLeft, Check, X } from "lucide-react"
 import { supabase } from "@/lib/supabaseClient"
 
 type JournalEntry = {
@@ -25,6 +26,9 @@ export default function JournalPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDate, setEditDate] = useState("");
+  const [editContent, setEditContent] = useState("");
 
   useEffect(() => {
     const fetchEntries = async () => {
@@ -92,6 +96,33 @@ export default function JournalPage() {
     setLoading(false)
   }
 
+  const startEdit = (entry: JournalEntry) => {
+    setEditingId(entry.id);
+    setEditDate(entry.entry_date);
+    setEditContent(entry.content);
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditDate("");
+    setEditContent("");
+  };
+  const saveEdit = async (id: string) => {
+    setLoading(true);
+    setError(null);
+    const { data, error: updateError } = await supabase
+      .from("journal_entries")
+      .update({ entry_date: editDate, content: editContent })
+      .eq("id", id)
+      .select();
+    if (updateError) {
+      setError(updateError.message || "Failed to update entry.");
+    } else if (data && data.length > 0) {
+      setEntries((prev) => prev.map((e) => (e.id === id ? data[0] : e)));
+      cancelEdit();
+    }
+    setLoading(false);
+  };
+
   return (
     <div className="container mx-auto p-4 bg-[#0E0E0F] min-h-screen">
       <Link href="/dashboard" className="flex items-center text-blue-500 hover:text-blue-400 mb-4">
@@ -146,22 +177,60 @@ export default function JournalPage() {
                 <Card key={entry.id} className="bg-[#141415] border border-gray-700">
                   <CardContent className="p-4">
                     <div className="flex justify-between items-start">
-                      <div>
-                        <p className="text-sm text-gray-400">
-                          {format(new Date(entry.entry_date), "MMMM d, yyyy")}
-                        </p>
-                        <p className="text-white mt-2">{entry.content}</p>
+                      <div className="flex-1">
+                        {editingId === entry.id ? (
+                          <>
+                            <input
+                              type="date"
+                              value={editDate}
+                              onChange={e => setEditDate(e.target.value)}
+                              className="bg-[#232325] !text-white mb-2 block"
+                            />
+                            <Textarea
+                              value={editContent}
+                              onChange={e => setEditContent(e.target.value)}
+                              className="min-h-[100px] bg-[#232325] text-white border-gray-700 focus:border-gray-600 mb-2"
+                            />
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-sm text-gray-400">
+                              {format(parseISO(entry.entry_date), "MMMM d, yyyy")}
+                            </p>
+                            <p className="text-white mt-2">{entry.content}</p>
+                          </>
+                        )}
                       </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="hover:bg-gray-800"
-                          onClick={() => handleDelete(entry.id)}
-                          disabled={loading}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-400" />
-                        </Button>
+                      <div className="flex flex-col gap-2 items-end ml-4">
+                        {editingId === entry.id ? (
+                          <>
+                            <Button size="icon" variant="ghost" onClick={() => saveEdit(entry.id)} title="Save" className="text-green-500 hover:text-green-700"><Check className="w-4 h-4" /></Button>
+                            <Button size="icon" variant="ghost" onClick={cancelEdit} title="Cancel" className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></Button>
+                          </>
+                        ) : (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="hover:bg-gray-800"
+                              onClick={() => startEdit(entry)}
+                              disabled={loading}
+                              title="Edit"
+                            >
+                              <Edit2 className="h-4 w-4 text-blue-400" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="hover:bg-gray-800"
+                              onClick={() => handleDelete(entry.id)}
+                              disabled={loading}
+                              title="Delete"
+                            >
+                              <Trash2 className="h-4 w-4 text-red-400" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </CardContent>

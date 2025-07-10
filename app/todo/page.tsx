@@ -341,12 +341,29 @@ export default function TodoPage() {
             )}
             {isDateEnabled && isTimeEnabled && (
               <div className="flex space-x-2">
-                <Input
-                  type="time"
+                <Select
                   value={newDueTime}
-                  onChange={(e) => setNewDueTime(e.target.value)}
-                  className="bg-[#1A1A1B] border-gray-700 text-white flex-grow"
-                />
+                  onValueChange={setNewDueTime}
+                >
+                  <SelectTrigger id="due-time" className="bg-[#1A1A1B] border-gray-700 text-white w-full rounded px-3 py-2">
+                    <SelectValue placeholder="Select a time (optional)" className="!text-white !placeholder:text-gray-400" />
+                  </SelectTrigger>
+                  <SelectContent className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                    {Array.from({ length: 24 * 2 }, (_, i) => {
+                      const hour24 = Math.floor(i / 2);
+                      const min = i % 2 === 0 ? '00' : '30';
+                      const hour12 = ((hour24 + 11) % 12) + 1;
+                      const ampm = hour24 < 12 ? 'AM' : 'PM';
+                      const display = `${hour12.toString().padStart(2, '0')}:${min} ${ampm}`;
+                      const value = `${hour24.toString().padStart(2, '0')}:${min}`;
+                      return (
+                        <SelectItem key={value} value={value} className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                          {display}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
               </div>
             )}
             <Button type="submit" className="w-full text-white">

@@ -9,6 +9,7 @@ import Link from "next/link";
 import { ArrowLeft, Calendar, Trash2, Edit2, Trophy } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { format, parseISO } from "date-fns"
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 export type SelfDevPriority = {
   id: string;
@@ -220,15 +221,29 @@ export default function SelfDevelopmentPage() {
                   style={{ minWidth: 0 }}
                 />
                 {newDueDateOnly && (
-                  <Input
-                    id="due-time"
-                    type="time"
+                  <Select
                     value={newDueTime}
-                    onChange={(e) => setNewDueTime(e.target.value)}
-                    className="bg-[#1A1A1B] border-gray-700 !text-white !placeholder:text-gray-400 w-auto"
-                    placeholder="Optional time"
-                    style={{ minWidth: 0 }}
-                  />
+                    onValueChange={(value) => setNewDueTime(value)}
+                  >
+                    <SelectTrigger id="due-time" className="bg-[#1A1A1B] border-gray-700 !text-white w-full rounded px-3 py-2">
+                      <SelectValue placeholder="Select a time (optional)" className="!text-white !placeholder:text-gray-400" />
+                    </SelectTrigger>
+                    <SelectContent className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                      {Array.from({ length: 24 * 2 }, (_, i) => {
+                        const hour24 = Math.floor(i / 2);
+                        const min = i % 2 === 0 ? '00' : '30';
+                        const hour12 = ((hour24 + 11) % 12) + 1;
+                        const ampm = hour24 < 12 ? 'AM' : 'PM';
+                        const display = `${hour12.toString().padStart(2, '0')}:${min} ${ampm}`;
+                        const value = `${hour24.toString().padStart(2, '0')}:${min}`;
+                        return (
+                          <SelectItem key={value} value={value} className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                            {display}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
                 )}
                 <span className="text-gray-400 text-xs">(optional)</span>
               </div>
@@ -264,12 +279,29 @@ export default function SelfDevelopmentPage() {
                             className="bg-[#232325] !text-white"
                           />
                           {editDate && (
-                            <Input
-                              type="time"
+                            <Select
                               value={editTime}
-                              onChange={e => setEditTime(e.target.value)}
-                              className="bg-[#232325] !text-white"
-                            />
+                              onValueChange={value => setEditTime(value)}
+                            >
+                              <SelectTrigger id="edit-due-time" className="bg-[#232325] border-gray-700 !text-white w-full rounded px-3 py-2">
+                                <SelectValue placeholder="Select a time (optional)" className="!text-white !placeholder:text-gray-400" />
+                              </SelectTrigger>
+                              <SelectContent className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                                {Array.from({ length: 24 * 2 }, (_, i) => {
+                                  const hour24 = Math.floor(i / 2);
+                                  const min = i % 2 === 0 ? '00' : '30';
+                                  const hour12 = ((hour24 + 11) % 12) + 1;
+                                  const ampm = hour24 < 12 ? 'AM' : 'PM';
+                                  const display = `${hour12.toString().padStart(2, '0')}:${min} ${ampm}`;
+                                  const value = `${hour24.toString().padStart(2, '0')}:${min}`;
+                                  return (
+                                    <SelectItem key={value} value={value} className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                                      {display}
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
                           )}
                         </div>
                       </div>

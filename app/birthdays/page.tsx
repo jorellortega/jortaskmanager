@@ -7,10 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ArrowLeft, Cake } from "lucide-react"
+import { ArrowLeft, Cake, Edit2, Check, X, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { supabase } from "@/lib/supabaseClient"
+import { parseISO } from "date-fns";
 
 type Birthday = {
   id: string
@@ -26,6 +27,9 @@ export default function BirthdaysPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDate, setEditDate] = useState("");
 
   useEffect(() => {
     const fetchBirthdays = async () => {
@@ -82,6 +86,48 @@ export default function BirthdaysPage() {
     }
   }
 
+  const startEdit = (birthday: Birthday) => {
+    setEditingId(birthday.id);
+    setEditName(birthday.name);
+    setEditDate(birthday.birthdate);
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditName("");
+    setEditDate("");
+  };
+  const saveEdit = async (id: string) => {
+    setError(null);
+    setLoading(true);
+    const { data, error: updateError } = await supabase
+      .from("birthdays")
+      .update({ name: editName, birthdate: editDate })
+      .eq("id", id)
+      .select();
+    if (updateError) {
+      setError(updateError.message || "Failed to update birthday.");
+    } else if (data && data.length > 0) {
+      setBirthdays((prev) => prev.map((b) => (b.id === id ? data[0] : b)));
+      cancelEdit();
+    }
+    setLoading(false);
+  };
+  const deleteBirthday = async (id: string) => {
+    setError(null);
+    setLoading(true);
+    const { error: deleteError } = await supabase
+      .from("birthdays")
+      .delete()
+      .eq("id", id);
+    if (deleteError) {
+      setError(deleteError.message || "Failed to delete birthday.");
+    } else {
+      setBirthdays((prev) => prev.filter((b) => b.id !== id));
+      if (editingId === id) cancelEdit();
+    }
+    setLoading(false);
+  };
+
   return (
     <div className="container mx-auto p-4 bg-[#0E0E0F] min-h-screen text-white">
       <Link href="/dashboard" className="flex items-center text-blue-500 hover:text-blue-400 mb-4">
@@ -134,11 +180,35 @@ export default function BirthdaysPage() {
           ) : (
             <ul className="space-y-2">
               {birthdays.map((birthday) => (
-                <li key={birthday.id} className="bg-[#1A1A1B] p-2 rounded flex items-center text-white">
+                <li key={birthday.id} className="bg-[#1A1A1B] p-2 rounded flex items-center text-white gap-2">
                   <Cake className="h-5 w-5 text-pink-400 mr-2" />
-                  <span>
-                    <strong>{birthday.name}</strong> - {format(new Date(birthday.birthdate), "MMMM d")}
-                  </span>
+                  {editingId === birthday.id ? (
+                    <>
+                      <Input
+                        value={editName}
+                        onChange={e => setEditName(e.target.value)}
+                        className="bg-[#232325] !text-white mr-2"
+                        placeholder="Name"
+                      />
+                      <Input
+                        type="date"
+                        value={editDate}
+                        onChange={e => setEditDate(e.target.value)}
+                        className="bg-[#232325] !text-white mr-2"
+                      />
+                      <Button size="icon" variant="ghost" onClick={() => saveEdit(birthday.id)} title="Save" className="text-green-500 hover:text-green-700"><Check className="w-4 h-4" /></Button>
+                      <Button size="icon" variant="ghost" onClick={cancelEdit} title="Cancel" className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></Button>
+                      <Button size="icon" variant="ghost" onClick={() => deleteBirthday(birthday.id)} title="Delete" className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></Button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex-1">
+                        <strong>{birthday.name}</strong> - {format(parseISO(birthday.birthdate), "MMMM d")}
+                      </span>
+                      <Button size="icon" variant="ghost" onClick={() => startEdit(birthday)} title="Edit" className="text-blue-400 hover:text-blue-600"><Edit2 className="w-4 h-4" /></Button>
+                      <Button size="icon" variant="ghost" onClick={() => deleteBirthday(birthday.id)} title="Delete" className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></Button>
+                    </>
+                  )}
                 </li>
               ))}
             </ul>

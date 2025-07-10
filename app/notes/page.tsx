@@ -181,8 +181,8 @@ export default function NotesPage() {
                 </div>
               ) : (
                 <>
-                  <h2 className="text-xl font-semibold mb-2">{note.title}</h2>
-                  <p className="text-gray-300 mb-4">{note.content}</p>
+                  <h2 className="text-xl font-semibold mb-2 text-white">{note.title}</h2>
+                  <p className="text-white mb-4">{note.content}</p>
                   <div className="flex justify-between items-center text-sm text-gray-400">
                     <span>Created: {new Date(note.created_at).toLocaleString()}</span>
                     <div className="space-x-2">

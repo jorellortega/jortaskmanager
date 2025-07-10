@@ -12,6 +12,7 @@ import Link from "next/link"
 import { format } from "date-fns"
 import { supabase } from "@/lib/supabaseClient"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
+import { Trash2, Edit2, Check, X } from "lucide-react";
 
 export type Appointment = {
   id: string
@@ -28,6 +29,10 @@ export default function AppointmentsPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [editTime, setEditTime] = useState("");
 
   // Generate time options in 30-minute intervals, display as 12-hour with AM/PM, value as 24-hour HH:MM:SS
   const timeOptions = Array.from({ length: 24 * 2 }, (_, i) => {
@@ -100,6 +105,53 @@ export default function AppointmentsPage() {
     }
   }
 
+  const startEdit = (apt: Appointment) => {
+    setEditingId(apt.id);
+    setEditTitle(apt.title);
+    setEditDate(apt.date);
+    setEditTime(apt.time);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditTitle("");
+    setEditDate("");
+    setEditTime("");
+  };
+
+  const saveEdit = async (id: string) => {
+    setError(null);
+    setLoading(true);
+    const { data, error: updateError } = await supabase
+      .from("appointments")
+      .update({ title: editTitle, date: editDate, time: editTime })
+      .eq("id", id)
+      .select();
+    if (updateError) {
+      setError(updateError.message || "Failed to update appointment.");
+    } else if (data && data.length > 0) {
+      setAppointments((prev) => prev.map((apt) => (apt.id === id ? data[0] : apt)));
+      cancelEdit();
+    }
+    setLoading(false);
+  };
+
+  const deleteAppointment = async (id: string) => {
+    setError(null);
+    setLoading(true);
+    const { error: deleteError } = await supabase
+      .from("appointments")
+      .delete()
+      .eq("id", id);
+    if (deleteError) {
+      setError(deleteError.message || "Failed to delete appointment.");
+    } else {
+      setAppointments((prev) => prev.filter((apt) => apt.id !== id));
+      if (editingId === id) cancelEdit();
+    }
+    setLoading(false);
+  };
+
   if (error) {
     return <div className="text-red-500 p-4">{error}</div>
   }
@@ -148,9 +200,9 @@ export default function AppointmentsPage() {
                 <SelectTrigger id="time" className="bg-[#1A1A1B] border-gray-700 !text-white w-full rounded px-3 py-2">
                   <SelectValue placeholder="Select a time" className="!text-white !placeholder:text-gray-400" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
                   {timeOptions.map(({ display, value }) => (
-                    <SelectItem key={value} value={value} className="!text-white">
+                    <SelectItem key={value} value={value} className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
                       {display}
                     </SelectItem>
                   ))}
@@ -171,9 +223,56 @@ export default function AppointmentsPage() {
           ) : (
             <ul className="space-y-2">
               {appointments.map((appointment) => (
-                <li key={appointment.id} className="bg-[#1A1A1B] p-2 rounded !text-white">
-                  <strong>{appointment.title}</strong> - {format(new Date(appointment.date), "MMM d, yyyy")} at{" "}
-                  {appointment.time}
+                <li key={appointment.id} className="bg-[#1A1A1B] p-2 rounded !text-white flex items-center justify-between gap-2">
+                  {editingId === appointment.id ? (
+                    <>
+                      <div className="flex flex-col gap-1 flex-1">
+                        <Input
+                          value={editTitle}
+                          onChange={e => setEditTitle(e.target.value)}
+                          className="mb-1 bg-[#232325] !text-white"
+                        />
+                        <div className="flex gap-2">
+                          <Input
+                            type="date"
+                            value={editDate}
+                            onChange={e => setEditDate(e.target.value)}
+                            className="bg-[#232325] !text-white"
+                          />
+                          <Select
+                            value={editTime}
+                            onValueChange={value => setEditTime(value)}
+                          >
+                            <SelectTrigger id="edit-apt-time" className="bg-[#232325] border-gray-700 !text-white w-full rounded px-3 py-2">
+                              <SelectValue placeholder="Select a time" className="!text-white !placeholder:text-gray-400" />
+                            </SelectTrigger>
+                            <SelectContent className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                              {timeOptions.map(({ display, value }) => (
+                                <SelectItem key={value} value={value} className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                                  {display}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 ml-2">
+                        <Button size="icon" variant="ghost" onClick={() => saveEdit(appointment.id)} title="Save" className="text-green-500 hover:text-green-700"><Check className="w-4 h-4" /></Button>
+                        <Button size="icon" variant="ghost" onClick={cancelEdit} title="Cancel" className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></Button>
+                        <Button size="icon" variant="ghost" onClick={() => deleteAppointment(appointment.id)} title="Delete" className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></Button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex-1">
+                        <strong>{appointment.title}</strong> - {format(new Date(appointment.date), "MMM d, yyyy")} at {appointment.time}
+                      </span>
+                      <div className="flex gap-2 ml-2">
+                        <Button size="icon" variant="ghost" onClick={() => startEdit(appointment)} title="Edit" className="text-blue-400 hover:text-blue-600"><Edit2 className="w-4 h-4" /></Button>
+                        <Button size="icon" variant="ghost" onClick={() => deleteAppointment(appointment.id)} title="Delete" className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></Button>
+                      </div>
+                    </>
+                  )}
                 </li>
               ))}
             </ul>
