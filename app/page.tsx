@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Settings, UserIcon, CalendarDays, Clock, Target, StickyNote, Utensils, Dumbbell, DollarSign, Repeat, Users, ArrowRight } from "lucide-react"
+import { Settings, UserIcon, CalendarDays, Clock, Target, StickyNote, Utensils, Dumbbell, DollarSign, Repeat, Users, ArrowRight, Heart } from "lucide-react"
 import Script from "next/script"
 
 export default function Home() {
@@ -10,7 +10,7 @@ export default function Home() {
     "@context": "https://schema.org",
     "@type": "WebApplication",
     "name": "Task Manager by JOR",
-    "description": "Transform your productivity with Task Manager by JOR. Organize calendar, appointments, goals, notes, meal planning, fitness tracking, expenses, routines, and peer collaboration all in one powerful app.",
+    "description": "Transform your productivity with Task Manager by JOR. Organize calendar, appointments, goals, notes, meal planning, fitness tracking, expenses, routines, cycle tracking, and peer collaboration all in one powerful app.",
     "url": "https://jortaskmanager.vercel.app",
     "applicationCategory": "ProductivityApplication",
     "operatingSystem": "Web Browser",
@@ -29,7 +29,8 @@ export default function Home() {
       "Fitness Tracking",
       "Expense Management",
       "Routine Building",
-      "Peer Collaboration"
+      "Peer Collaboration",
+      "Cycle Tracking"
     ],
     "author": {
       "@type": "Person",
@@ -140,6 +141,12 @@ export default function Home() {
                 <Users className="h-7 w-7 text-blue-400 mb-2" />
                 <h3 className="font-bold">Peer Sync</h3>
                 <p className="text-sm text-gray-400 text-center">Collaborate and sync with friends or peers.</p>
+              </article>
+              {/* Feature: Cycle Tracking */}
+              <article className="bg-[#18181A] rounded-lg p-5 flex flex-col items-center shadow-md border border-gray-800">
+                <Heart className="h-7 w-7 text-pink-400 mb-2" />
+                <h3 className="font-bold">Cycle Tracking</h3>
+                <p className="text-sm text-gray-400 text-center">Track your menstrual cycle and health patterns.</p>
               </article>
             </div>
           </section>

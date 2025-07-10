@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { CalendarDays, Clock, DollarSign, Briefcase, Sun, Utensils, Dumbbell, Cake, Repeat, CheckSquare, Target, Users, Lightbulb, Plane, Clock as ClockIcon, StickyNote, BookOpen, LayoutDashboard, Monitor, Award, Trophy } from 'lucide-react';
+import { CalendarDays, Clock, DollarSign, Briefcase, Sun, Utensils, Dumbbell, Cake, Repeat, CheckSquare, Target, Users, Lightbulb, Plane, Clock as ClockIcon, StickyNote, BookOpen, LayoutDashboard, Monitor, Award, Trophy, Heart } from 'lucide-react';
 
 const navIcons = [
   { href: '/dashboard', icon: <LayoutDashboard />, color: 'text-blue-400', glow: '#3b82f6' },
@@ -24,6 +24,7 @@ const navIcons = [
   { href: '/work-clock', icon: <ClockIcon />, color: 'text-blue-400', glow: '#3b82f6' },
   { href: '/notes', icon: <StickyNote />, color: 'text-yellow-400', glow: '#fde047' },
   { href: '/journal', icon: <BookOpen />, color: 'text-green-400', glow: '#22c55e' },
+  { href: '/cycle-tracking', icon: <Heart />, color: 'text-pink-400', glow: '#ec4899' },
 ];
 
 export default function TopNavBar() {

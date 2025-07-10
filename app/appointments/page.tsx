@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
-import { format } from "date-fns"
+import { format, parseISO } from "date-fns"
 import { supabase } from "@/lib/supabaseClient"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { Trash2, Edit2, Check, X } from "lucide-react";
@@ -265,7 +265,7 @@ export default function AppointmentsPage() {
                   ) : (
                     <>
                       <span className="flex-1">
-                        <strong>{appointment.title}</strong> - {format(new Date(appointment.date), "MMM d, yyyy")} at {appointment.time}
+                        <strong>{appointment.title}</strong> - {format(parseISO(appointment.date), "MMM d, yyyy")} at {appointment.time}
                       </span>
                       <div className="flex gap-2 ml-2">
                         <Button size="icon" variant="ghost" onClick={() => startEdit(appointment)} title="Edit" className="text-blue-400 hover:text-blue-600"><Edit2 className="w-4 h-4" /></Button>

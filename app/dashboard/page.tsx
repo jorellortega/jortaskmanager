@@ -299,11 +299,8 @@ export default function WeeklyTaskManager() {
     return day === format(today, "EEEE");
   }
 
-  // Helper to get sidebar days in correct order, starting from the day after today
-  const sidebarDays = [
-    ...days.slice(focusedDayIndex + 1),
-    ...days.slice(0, focusedDayIndex)
-  ];
+  // Helper to get the next 7 days (excluding today)
+  const sidebarDates = Array.from({ length: 7 }, (_, i) => addDays(today, i + 1));
 
   return (
     <div className="container mx-auto p-4 pb-24">
@@ -484,53 +481,55 @@ export default function WeeklyTaskManager() {
 
         {/* Other days - in the third column */}
         <div className="space-y-4">
-          {sidebarDays.map((day) => {
-              const dateStr = getDateForDay(day);
-              const numTasksForDay =
-                todos.filter((todo) => todo.due_date === dateStr).length +
-                workPriorities.filter((wp) => wp.due_date_only && wp.due_date_only === dateStr).length +
-                appointments.filter((apt) => format(parseISO(apt.date), "yyyy-MM-dd") === dateStr).length +
-                fitnessActivities.filter((fa) => fa.activity_date === dateStr).length +
-                leisureActivities.filter((la) => la.activity_date === dateStr).length;
-             const selfDevForDay = selfDevPriorities.filter((sd) => sd.due_date_only && sd.due_date_only === dateStr);
-              return (
-                <Card
-                  key={day}
-                  className="bg-[#141415] border border-gray-700 cursor-pointer hover:bg-[#1a1a1b] transition-colors"
-                  onClick={() => handleDayClick(day)}
-                >
-                  <div className="h-full w-full bg-[#141415] p-2 max-h-[150px] overflow-y-auto">
-                    <CardHeader className="p-1 bg-black">
-                      {/* Update the other days cards to show the leisure icon: */}
-                      <CardTitle className="flex justify-between items-center text-white">
-                        <div className="flex items-center">
-                          {appointments.some(
-                            (apt) =>
-                              format(parseISO(apt.date), "yyyy-MM-dd") === getDateForDay(day),
-                          ) && <Clock className="h-4 w-4 text-red-500 mr-2" />}
-                          {leisureActivities.some(
-                            (activity) => activity.activity_date === getDateForDay(day),
-                          ) && <Sun className="h-4 w-4 text-yellow-400 mr-2" />}
-                          {fitnessActivities.some(
-                            (activity) => activity.activity_date === getDateForDay(day),
-                          ) && <Dumbbell className="h-4 w-4 text-green-400 mr-2" />}
-                         {selfDevForDay.length > 0 && <Trophy className="h-4 w-4 text-yellow-400 mr-2" />}
-                          {day.toUpperCase()}
-                        </div>
-                        <span className="text-xs text-gray-300">
-                          {format(parseISO(getDateForDay(day)), "MMM d, yyyy")}
-                        </span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-1">
-                      <p className="text-sm text-gray-400 flex items-center justify-center h-full">
-                        {numTasksForDay} task(s)
-                      </p>
-                    </CardContent>
-                  </div>
-                </Card>
-              )
-            })}
+          {sidebarDates.map((dateObj) => {
+            const dayLabel = format(dateObj, "EEEE");
+            const dateStr = format(dateObj, "yyyy-MM-dd");
+            const numTasksForDay =
+              todos.filter((todo) => todo.due_date === dateStr).length +
+              workPriorities.filter((wp) => wp.due_date_only && wp.due_date_only === dateStr).length +
+              appointments.filter((apt) => format(parseISO(apt.date), "yyyy-MM-dd") === dateStr).length +
+              fitnessActivities.filter((fa) => fa.activity_date === dateStr).length +
+              leisureActivities.filter((la) => la.activity_date === dateStr).length;
+            const selfDevForDay = selfDevPriorities.filter((sd) => sd.due_date_only && sd.due_date_only === dateStr);
+            return (
+              <Card
+                key={dateStr}
+                className="bg-[#141415] border border-gray-700 cursor-pointer hover:bg-[#1a1a1b] transition-colors"
+                onClick={() => {
+                  setFocusedDayIndex(allDays.indexOf(dayLabel));
+                  setCurrentDay(dayLabel);
+                }}
+              >
+                <div className="h-full w-full bg-[#141415] p-2 max-h-[150px] overflow-y-auto">
+                  <CardHeader className="p-1 bg-black">
+                    <CardTitle className="flex justify-between items-center text-white">
+                      <div className="flex items-center">
+                        {appointments.some(
+                          (apt) => format(parseISO(apt.date), "yyyy-MM-dd") === dateStr,
+                        ) && <Clock className="h-4 w-4 text-red-500 mr-2" />}
+                        {leisureActivities.some(
+                          (activity) => activity.activity_date === dateStr,
+                        ) && <Sun className="h-4 w-4 text-yellow-400 mr-2" />}
+                        {fitnessActivities.some(
+                          (activity) => activity.activity_date === dateStr,
+                        ) && <Dumbbell className="h-4 w-4 text-green-400 mr-2" />}
+                        {selfDevForDay.length > 0 && <Trophy className="h-4 w-4 text-yellow-400 mr-2" />}
+                        {dayLabel.toUpperCase()}
+                      </div>
+                      <span className="text-xs text-gray-300">
+                        {format(dateObj, "MMM d, yyyy")}
+                      </span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-1">
+                    <p className="text-sm text-gray-400 flex items-center justify-center h-full">
+                      {numTasksForDay} task(s)
+                    </p>
+                  </CardContent>
+                </div>
+              </Card>
+            );
+          })}
         </div>
       </div>
       <p className="text-center text-xs text-gray-500 mt-8">Developed by JOR powered by Covion Studio</p>

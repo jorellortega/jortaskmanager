@@ -1,4 +1,4 @@
-import { CalendarDays, Clock, Target, StickyNote, Utensils, Dumbbell, DollarSign, Repeat, Users, Home as HomeIcon } from "lucide-react";
+import { CalendarDays, Clock, Target, StickyNote, Utensils, Dumbbell, DollarSign, Repeat, Users, Home as HomeIcon, Heart } from "lucide-react";
 import Link from "next/link";
 import type { Metadata } from "next";
 
@@ -79,6 +79,11 @@ const features = [
     icon: <Users className="h-8 w-8 text-blue-400 mb-2" />, 
     title: "Peer Sync",
     description: "Collaborate and sync with friends or peers. Share tasks, routines, and progress for accountability.",
+  },
+  {
+    icon: <Heart className="h-8 w-8 text-pink-400 mb-2" />, 
+    title: "Cycle Tracking",
+    description: "Track your menstrual cycle, symptoms, and patterns. Monitor your health and predict future periods.",
   },
 ];
 

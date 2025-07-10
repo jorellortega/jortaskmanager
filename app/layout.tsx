@@ -68,11 +68,10 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const showNavBar = typeof window !== 'undefined' ? window.location.pathname !== '/' : true;
   return (
     <html lang="en">
       <body className="min-h-screen bg-[#0E0E0F]">
-        {showNavBar && <TopNavBar />}
+        <TopNavBar />
         {children}
       </body>
     </html>
