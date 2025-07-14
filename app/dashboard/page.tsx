@@ -51,6 +51,7 @@ type Appointment = {
   title: string
   date: string
   time: string
+  completed: boolean
 }
 
 type LeisureActivity = {
@@ -76,6 +77,7 @@ type WorkPriority = {
   due_date_only?: string | null;
   due_datetime?: string;
   created_at?: string;
+  completed: boolean;
 };
 
 type SelfDevPriority = {
@@ -85,6 +87,7 @@ type SelfDevPriority = {
   due_date_only?: string | null;
   due_datetime?: string;
   created_at?: string;
+  completed: boolean;
 };
 
 const allDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -108,6 +111,7 @@ export default function WeeklyTaskManager() {
   const [addingTask, setAddingTask] = useState(false)
   const [newTaskText, setNewTaskText] = useState("")
   const router = useRouter();
+  const [focusedDate, setFocusedDate] = useState<string>("");
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -175,6 +179,9 @@ export default function WeeklyTaskManager() {
     setCurrentDay(allDays[idx]);
     setDays(allDays); // Always Monday-Sunday
     setFocusedDayIndex(idx); // Focus on today by default
+    // Set initial focusedDate to today
+    const monday = startOfWeek(now, { weekStartsOn: 1 });
+    setFocusedDate(format(addDays(monday, idx), "yyyy-MM-dd"));
   }, []);
 
   useEffect(() => {
@@ -187,14 +194,14 @@ export default function WeeklyTaskManager() {
   }
 
   const handleAddTaskConfirm = async () => {
-    if (!userId || !focusedDay || !newTaskText.trim()) {
+    if (!userId || !focusedDate || !newTaskText.trim()) {
       setAddingTask(false)
       setNewTaskText("")
       return
     }
     setLoading(true)
     setError(null)
-    const dueDate = getDateForDay(focusedDay)
+    const dueDate = getDateForDay(currentDay)
     const { data, error: insertError } = await supabase
       .from("todos")
       .insert([
@@ -256,11 +263,12 @@ export default function WeeklyTaskManager() {
     }
   }, [days, currentDay])
 
-  const handleDayClick = (clickedDay: string) => {
-    setFocusedDayIndex(days.indexOf(clickedDay))
-  }
+  const handleDayClick = (clickedDate: string, clickedDayLabel: string) => {
+    setFocusedDate(clickedDate);
+    setCurrentDay(clickedDayLabel);
+    setFocusedDayIndex(allDays.indexOf(clickedDayLabel));
+  };
 
-  const focusedDay = days[focusedDayIndex] || ""
   // Always map day label to correct date in current week
   function getDateForDay(day: string) {
     // Use the stored 'today' date for all calculations
@@ -268,8 +276,8 @@ export default function WeeklyTaskManager() {
     const idx = allDays.indexOf(day);
     return format(addDays(monday, idx), "yyyy-MM-dd");
   }
-  const focusedDate = focusedDay ? getDateForDay(focusedDay) : ""
-  const todosForDay = todos.filter((todo) => todo.due_date === focusedDate)
+  // Use focusedDate directly for filtering
+  const todosForDay = todos.filter((todo) => todo.due_date === focusedDate);
   const workPrioritiesForDay = workPriorities.filter((wp) => {
     // Use due_date_only if present, else due_datetime
     if (wp.due_date_only) {
@@ -302,6 +310,82 @@ export default function WeeklyTaskManager() {
   // Helper to get the next 7 days (excluding today)
   const sidebarDates = Array.from({ length: 7 }, (_, i) => addDays(today, i + 1));
 
+  const handleToggleFitness = async (id: string, completed: boolean) => {
+    setLoading(true);
+    setError(null);
+    const { data, error } = await supabase
+      .from("fitness_activities")
+      .update({ completed: !completed })
+      .eq("id", id)
+      .select();
+    if (error) {
+      setError(error.message || "Failed to update fitness activity.");
+    } else if (data && data.length > 0) {
+      setFitnessActivities((prev) => prev.map((a) => (a.id === id ? data[0] : a)));
+    }
+    setLoading(false);
+  };
+  const handleToggleLeisure = async (id: string, completed: boolean) => {
+    setLoading(true);
+    setError(null);
+    const { data, error } = await supabase
+      .from("leisure_activities")
+      .update({ completed: !completed })
+      .eq("id", id)
+      .select();
+    if (error) {
+      setError(error.message || "Failed to update leisure activity.");
+    } else if (data && data.length > 0) {
+      setLeisureActivities((prev) => prev.map((a) => (a.id === id ? data[0] : a)));
+    }
+    setLoading(false);
+  };
+  const handleToggleAppointment = async (id: string, completed: boolean) => {
+    setLoading(true);
+    setError(null);
+    const { data, error } = await supabase
+      .from("appointments")
+      .update({ completed: !completed })
+      .eq("id", id)
+      .select();
+    if (error) {
+      setError(error.message || "Failed to update appointment.");
+    } else if (data && data.length > 0) {
+      setAppointments((prev) => prev.map((a) => (a.id === id ? data[0] : a)));
+    }
+    setLoading(false);
+  };
+const handleToggleWorkPriority = async (id: string, completed: boolean) => {
+  setLoading(true);
+  setError(null);
+  const { data, error } = await supabase
+    .from("work_priorities")
+    .update({ completed: !completed })
+    .eq("id", id)
+    .select();
+  if (error) {
+    setError(error.message || "Failed to update work priority.");
+  } else if (data && data.length > 0) {
+    setWorkPriorities((prev) => prev.map((a) => (a.id === id ? data[0] : a)));
+  }
+  setLoading(false);
+};
+const handleToggleSelfDevPriority = async (id: string, completed: boolean) => {
+  setLoading(true);
+  setError(null);
+  const { data, error } = await supabase
+    .from("self_development_priorities")
+    .update({ completed: !completed })
+    .eq("id", id)
+    .select();
+  if (error) {
+    setError(error.message || "Failed to update self-development priority.");
+  } else if (data && data.length > 0) {
+    setSelfDevPriorities((prev) => prev.map((a) => (a.id === id ? data[0] : a)));
+  }
+  setLoading(false);
+};
+
   return (
     <div className="container mx-auto p-4 pb-24">
       {/* Display the user's name at the top */}
@@ -315,9 +399,7 @@ export default function WeeklyTaskManager() {
             bg-[#141415]
             ${
               appointments.some(
-                (apt) =>
-                  format(new Date(apt.date), "yyyy-MM-dd") ===
-                  format(addDays(startOfWeek(today, { weekStartsOn: 1 }), days.indexOf(focusedDay)), "yyyy-MM-dd"),
+                (apt) => apt.date === focusedDate
               )
                 ? "border-4 border-transparent bg-gradient-to-r from-red-500 via-red-400 to-red-300 p-[1px]"
                 : "border-4 border-transparent bg-gradient-to-r from-green-500 via-green-400 to-green-300 p-[1px]"
@@ -330,10 +412,10 @@ export default function WeeklyTaskManager() {
             <CardHeader className="p-2 bg-black">
               <CardTitle className="flex items-center justify-between text-white">
                 <div className="flex items-center">
-                  {!isCurrentDay(focusedDay) && (
+                  {!isCurrentDay(currentDay) && (
                     <ArrowLeft className="h-5 w-5 mr-2 cursor-pointer hover:text-blue-400" onClick={goToToday} />
                   )}
-                  {focusedDay.toUpperCase()}
+                  {currentDay.toUpperCase()}
                 </div>
                 <div className="flex items-center space-x-4">
                   {appointments.some(
@@ -382,7 +464,7 @@ export default function WeeklyTaskManager() {
                   <Checkbox
                     id={`task-${task.id}`}
                     checked={task.completed}
-                    onCheckedChange={() => toggleTask(focusedDay, task.id)}
+                    onCheckedChange={() => toggleTask(currentDay, task.id)}
                   />
                   <label
                     htmlFor={`task-${task.id}`}
@@ -393,18 +475,21 @@ export default function WeeklyTaskManager() {
                 </div>
               ))}
               {appointments.some(
-                (apt) =>
-                  format(new Date(apt.date), "yyyy-MM-dd") === focusedDate,
+                (apt) => apt.date === focusedDate,
               ) && (
                 <div className="mt-4">
                   <h3 className="text-red-500 font-semibold mb-2">Appointments:</h3>
                   <ul className="list-disc list-inside">
                     {appointments
-                      .filter((apt) => format(parseISO(apt.date), "yyyy-MM-dd") === focusedDate)
+                      .filter((apt) => apt.date === focusedDate)
                       .map((apt) => (
-                        <li key={apt.id} className="text-white flex items-center">
-                          <Clock className="h-4 w-4 text-red-500 mr-2 inline" />
-                          <span>
+                        <li key={apt.id} className="text-white flex items-center space-x-2">
+                          <Checkbox
+                            checked={apt.completed}
+                            onCheckedChange={() => handleToggleAppointment(apt.id, apt.completed)}
+                            className="border-gray-400"
+                          />
+                          <span className={apt.completed ? "line-through text-gray-500" : ""}>
                             {apt.title} at {apt.time}
                           </span>
                         </li>
@@ -421,8 +506,13 @@ export default function WeeklyTaskManager() {
                     {leisureActivities
                       .filter((activity) => activity.activity_date === focusedDate)
                       .map((activity) => (
-                        <li key={activity.id} className="text-white">
-                          {activity.activity}
+                        <li key={activity.id} className="text-white flex items-center space-x-2">
+                          <Checkbox
+                            checked={activity.completed}
+                            onCheckedChange={() => handleToggleLeisure(activity.id, activity.completed)}
+                            className="border-gray-400"
+                          />
+                          <span className={activity.completed ? "line-through text-gray-500" : ""}>{activity.activity}</span>
                         </li>
                       ))}
                   </ul>
@@ -437,8 +527,13 @@ export default function WeeklyTaskManager() {
                     {fitnessActivities
                       .filter((activity) => activity.activity_date === focusedDate)
                       .map((activity) => (
-                        <li key={activity.id} className="text-white">
-                          {activity.activity}
+                        <li key={activity.id} className="text-white flex items-center space-x-2">
+                          <Checkbox
+                            checked={activity.completed}
+                            onCheckedChange={() => handleToggleFitness(activity.id, activity.completed)}
+                            className="border-gray-400"
+                          />
+                          <span className={activity.completed ? "line-through text-gray-500" : ""}>{activity.activity}</span>
                         </li>
                       ))}
                   </ul>
@@ -451,8 +546,13 @@ export default function WeeklyTaskManager() {
                   </h3>
                   <ul className="list-disc list-inside">
                     {workPrioritiesForDay.map((wp) => (
-                      <li key={wp.id} className="text-white">
-                        {wp.title}
+                      <li key={wp.id} className="text-white flex items-center space-x-2">
+                        <Checkbox
+                          checked={wp.completed}
+                          onCheckedChange={() => handleToggleWorkPriority(wp.id, wp.completed)}
+                          className="border-gray-400"
+                        />
+                        <span className={wp.completed ? "line-through text-gray-500" : ""}>{wp.title}</span>
                       </li>
                     ))}
                   </ul>
@@ -465,14 +565,19 @@ export default function WeeklyTaskManager() {
                   </h3>
                   <ul className="list-disc list-inside">
                     {selfDevPrioritiesForDay.map((sd) => (
-                      <li key={sd.id} className="text-white">
-                        {sd.title}
+                      <li key={sd.id} className="text-white flex items-center space-x-2">
+                        <Checkbox
+                          checked={sd.completed}
+                          onCheckedChange={() => handleToggleSelfDevPriority(sd.id, sd.completed)}
+                          className="border-gray-400"
+                        />
+                        <span className={sd.completed ? "line-through text-gray-500" : ""}>{sd.title}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
               )}
-              <Button onClick={() => addTask(focusedDay)} className="w-full" disabled={addingTask}>
+              <Button onClick={() => addTask(currentDay)} className="w-full" disabled={addingTask}>
                 Add Task
               </Button>
             </CardContent>
@@ -484,52 +589,49 @@ export default function WeeklyTaskManager() {
           {sidebarDates.map((dateObj) => {
             const dayLabel = format(dateObj, "EEEE");
             const dateStr = format(dateObj, "yyyy-MM-dd");
-            const numTasksForDay =
-              todos.filter((todo) => todo.due_date === dateStr).length +
-              workPriorities.filter((wp) => wp.due_date_only && wp.due_date_only === dateStr).length +
-              appointments.filter((apt) => format(parseISO(apt.date), "yyyy-MM-dd") === dateStr).length +
-              fitnessActivities.filter((fa) => fa.activity_date === dateStr).length +
-              leisureActivities.filter((la) => la.activity_date === dateStr).length;
-            const selfDevForDay = selfDevPriorities.filter((sd) => sd.due_date_only && sd.due_date_only === dateStr);
-            return (
-              <Card
+              const numTasksForDay =
+                todos.filter((todo) => todo.due_date === dateStr).length +
+                workPriorities.filter((wp) => wp.due_date_only && wp.due_date_only === dateStr).length +
+                appointments.filter((apt) => apt.date === dateStr).length +
+                fitnessActivities.filter((fa) => fa.activity_date === dateStr).length +
+                leisureActivities.filter((la) => la.activity_date === dateStr).length;
+             const selfDevForDay = selfDevPriorities.filter((sd) => sd.due_date_only && sd.due_date_only === dateStr);
+              return (
+                <Card
                 key={dateStr}
-                className="bg-[#141415] border border-gray-700 cursor-pointer hover:bg-[#1a1a1b] transition-colors"
-                onClick={() => {
-                  setFocusedDayIndex(allDays.indexOf(dayLabel));
-                  setCurrentDay(dayLabel);
-                }}
-              >
-                <div className="h-full w-full bg-[#141415] p-2 max-h-[150px] overflow-y-auto">
-                  <CardHeader className="p-1 bg-black">
-                    <CardTitle className="flex justify-between items-center text-white">
-                      <div className="flex items-center">
-                        {appointments.some(
-                          (apt) => format(parseISO(apt.date), "yyyy-MM-dd") === dateStr,
-                        ) && <Clock className="h-4 w-4 text-red-500 mr-2" />}
-                        {leisureActivities.some(
+                  className="bg-[#141415] border border-gray-700 cursor-pointer hover:bg-[#1a1a1b] transition-colors"
+                onClick={() => handleDayClick(dateStr, dayLabel)}
+                >
+                  <div className="h-full w-full bg-[#141415] p-2 max-h-[150px] overflow-y-auto">
+                    <CardHeader className="p-1 bg-black">
+                      <CardTitle className="flex justify-between items-center text-white">
+                        <div className="flex items-center">
+                          {appointments.some(
+                          (apt) => apt.date === dateStr,
+                          ) && <Clock className="h-4 w-4 text-red-500 mr-2" />}
+                          {leisureActivities.some(
                           (activity) => activity.activity_date === dateStr,
-                        ) && <Sun className="h-4 w-4 text-yellow-400 mr-2" />}
-                        {fitnessActivities.some(
+                          ) && <Sun className="h-4 w-4 text-yellow-400 mr-2" />}
+                          {fitnessActivities.some(
                           (activity) => activity.activity_date === dateStr,
-                        ) && <Dumbbell className="h-4 w-4 text-green-400 mr-2" />}
-                        {selfDevForDay.length > 0 && <Trophy className="h-4 w-4 text-yellow-400 mr-2" />}
+                          ) && <Dumbbell className="h-4 w-4 text-green-400 mr-2" />}
+                         {selfDevForDay.length > 0 && <Trophy className="h-4 w-4 text-yellow-400 mr-2" />}
                         {dayLabel.toUpperCase()}
-                      </div>
-                      <span className="text-xs text-gray-300">
+                        </div>
+                        <span className="text-xs text-gray-300">
                         {format(dateObj, "MMM d, yyyy")}
-                      </span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-1">
-                    <p className="text-sm text-gray-400 flex items-center justify-center h-full">
-                      {numTasksForDay} task(s)
-                    </p>
-                  </CardContent>
-                </div>
-              </Card>
+                        </span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-1">
+                      <p className="text-sm text-gray-400 flex items-center justify-center h-full">
+                        {numTasksForDay} task(s)
+                      </p>
+                    </CardContent>
+                  </div>
+                </Card>
             );
-          })}
+            })}
         </div>
       </div>
       <p className="text-center text-xs text-gray-500 mt-8">Developed by JOR powered by Covion Studio</p>

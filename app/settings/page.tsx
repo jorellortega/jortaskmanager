@@ -126,6 +126,15 @@ export default function Settings() {
           <Switch id="notifications" checked={notifications} onCheckedChange={setNotifications} />
         </CardContent>
       </Card>
+
+      {/* Time Sync Button */}
+      <div className="flex justify-center mt-8">
+        <Link href="/time-sync">
+          <Button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg text-lg shadow">
+            Time Settings
+          </Button>
+        </Link>
+      </div>
     </div>
   )
 }
