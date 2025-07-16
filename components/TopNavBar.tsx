@@ -1,6 +1,7 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { CalendarDays, Clock, DollarSign, Briefcase, Sun, Utensils, Dumbbell, Cake, Repeat, CheckSquare, Target, Users, Lightbulb, Plane, Clock as ClockIcon, StickyNote, BookOpen, LayoutDashboard, Monitor, Award, Trophy, Heart } from 'lucide-react';
 
 const navIcons = [
@@ -27,11 +28,32 @@ const navIcons = [
   { href: '/cycle-tracking', icon: <Heart />, color: 'text-pink-400', glow: '#ec4899' },
 ];
 
+// Generate a unique instance ID for debugging
+const instanceId = Math.random().toString(36).substr(2, 9);
+
 export default function TopNavBar() {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
-  if (typeof window !== 'undefined' && window.location.pathname === '/') return null;
+  const [mounted, setMounted] = useState(false);
+  const pathname = usePathname();
+
+  useEffect(() => {
+    console.log(`TopNavBar instance ${instanceId} mounting...`);
+    setMounted(true);
+    return () => {
+      console.log(`TopNavBar instance ${instanceId} unmounting...`);
+    };
+  }, []);
+
+  // Don't render on home page, but only after mounting to avoid hydration mismatch
+  if (!mounted || pathname === '/') {
+    console.log(`TopNavBar instance ${instanceId} not rendering - mounted: ${mounted}, pathname: ${pathname}`);
+    return null;
+  }
+
+  console.log(`TopNavBar instance ${instanceId} rendering...`);
+
   return (
-    <div className="container mx-auto">
+    <div className="container mx-auto" data-topnavbar-instance={instanceId}>
       <div className="bg-[#141415] border border-gray-700 mb-4 mt-2 p-2 rounded-xl">
         <div className="flex flex-nowrap items-center gap-4 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent px-2 py-2 w-full">
           <div className="flex items-center gap-4 min-w-max">

@@ -4,7 +4,7 @@ import './globals.css'
 import { CalendarDays, Clock, DollarSign, Briefcase, Sun, Utensils, Dumbbell, Cake, Repeat, CheckSquare, Target, Users, Lightbulb, Plane, Clock as ClockIcon, StickyNote, BookOpen, LayoutDashboard } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import TopNavBar from '../components/TopNavBar';
+import TopNavBarWrapper from '../components/TopNavBarWrapper';
 
 export const metadata: Metadata = {
   title: 'Task Manager by JOR - Comprehensive Weekly Task Management',
@@ -71,7 +71,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-[#0E0E0F]">
-        <TopNavBar />
+        <TopNavBarWrapper />
         {children}
       </body>
     </html>
