@@ -10,6 +10,7 @@ import {
   CalendarDays,
   Clock,
   ArrowLeft,
+  ArrowRight,
   Sun,
   Dumbbell,
   Cake,
@@ -32,7 +33,7 @@ import {
   Rss,
   Trophy,
 } from "lucide-react"
-import { format, addDays, startOfWeek, parseISO } from "date-fns"
+import { format, addDays, startOfWeek, parseISO, differenceInDays, subDays } from "date-fns"
 import Link from "next/link"
 import { supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
@@ -43,6 +44,7 @@ type Todo = {
   task: string
   due_date: string | null
   completed: boolean
+  parent_id?: string | null
 }
 
 type Appointment = {
@@ -110,6 +112,7 @@ export default function WeeklyTaskManager() {
   const [error, setError] = useState<string | null>(null)
   const [addingTask, setAddingTask] = useState(false)
   const [newTaskText, setNewTaskText] = useState("")
+  const [expandedTodos, setExpandedTodos] = useState<Set<string>>(new Set())
   const router = useRouter();
   const [focusedDate, setFocusedDate] = useState<string>("");
 
@@ -201,7 +204,8 @@ export default function WeeklyTaskManager() {
     }
     setLoading(true)
     setError(null)
-    const dueDate = getDateForDay(currentDay)
+    // Use focusedDate directly instead of calculating from currentDay
+    const dueDate = focusedDate
     const { data, error: insertError } = await supabase
       .from("todos")
       .insert([
@@ -257,11 +261,50 @@ export default function WeeklyTaskManager() {
   }
 
   const goToToday = useCallback(() => {
-    const todayIndex = days.indexOf(currentDay)
-    if (todayIndex !== -1) {
-      setFocusedDayIndex(todayIndex)
+    // Use the stored 'today' date to set the focused date and day
+    const todayDateStr = format(today, "yyyy-MM-dd");
+    const todayDayLabel = format(today, "EEEE");
+    
+    setFocusedDate(todayDateStr);
+    setCurrentDay(todayDayLabel);
+    setFocusedDayIndex(allDays.indexOf(todayDayLabel));
+  }, [today])
+
+  const goToPreviousDay = useCallback(() => {
+    // Calculate how many days back we can go (max 7 days back from today)
+    const currentDate = parseISO(focusedDate);
+    const todayDate = today;
+    const daysDiff = differenceInDays(todayDate, currentDate);
+    
+    // Only allow going back if we're not already 7 days back
+    if (daysDiff < 7) {
+      const previousDate = subDays(currentDate, 1);
+      const previousDateStr = format(previousDate, "yyyy-MM-dd");
+      const previousDayLabel = format(previousDate, "EEEE");
+      
+      setFocusedDate(previousDateStr);
+      setCurrentDay(previousDayLabel);
+      setFocusedDayIndex(allDays.indexOf(previousDayLabel));
     }
-  }, [days, currentDay])
+  }, [focusedDate, today]);
+
+  const goToNextDay = useCallback(() => {
+    // Calculate how many days forward we can go (max 7 days forward from today)
+    const currentDate = parseISO(focusedDate);
+    const todayDate = today;
+    const daysDiff = differenceInDays(currentDate, todayDate);
+    
+    // Only allow going forward if we're not already 7 days forward
+    if (daysDiff < 7) {
+      const nextDate = addDays(currentDate, 1);
+      const nextDateStr = format(nextDate, "yyyy-MM-dd");
+      const nextDayLabel = format(nextDate, "EEEE");
+      
+      setFocusedDate(nextDateStr);
+      setCurrentDay(nextDayLabel);
+      setFocusedDayIndex(allDays.indexOf(nextDayLabel));
+    }
+  }, [focusedDate, today]);
 
   const handleDayClick = (clickedDate: string, clickedDayLabel: string) => {
     setFocusedDate(clickedDate);
@@ -276,8 +319,31 @@ export default function WeeklyTaskManager() {
     const idx = allDays.indexOf(day);
     return format(addDays(monday, idx), "yyyy-MM-dd");
   }
-  // Use focusedDate directly for filtering
-  const todosForDay = todos.filter((todo) => todo.due_date === focusedDate);
+  // Helper function to get subtodos for a parent todo
+  const getSubtodos = (parentId: string) => {
+    return todos.filter(todo => todo.parent_id === parentId);
+  };
+
+  // Helper function to check if a todo has subtodos
+  const hasSubtodos = (todoId: string) => {
+    return todos.some(todo => todo.parent_id === todoId);
+  };
+
+  // Helper function to toggle expanded state
+  const toggleExpanded = (todoId: string) => {
+    setExpandedTodos(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(todoId)) {
+        newSet.delete(todoId);
+      } else {
+        newSet.add(todoId);
+      }
+      return newSet;
+    });
+  };
+
+  // Use focusedDate directly for filtering - only show parent todos (no parent_id)
+  const todosForDay = todos.filter((todo) => todo.due_date === focusedDate && !todo.parent_id);
   const workPrioritiesForDay = workPriorities.filter((wp) => {
     // Use due_date_only if present, else due_datetime
     if (wp.due_date_only) {
@@ -412,11 +478,35 @@ const handleToggleSelfDevPriority = async (id: string, completed: boolean) => {
             <CardHeader className="p-2 bg-black">
               <CardTitle className="flex items-center justify-between text-white">
                 <div className="flex items-center">
-                  {!isCurrentDay(currentDay) && (
-                    <ArrowLeft className="h-5 w-5 mr-2 cursor-pointer hover:text-blue-400" onClick={goToToday} />
-                  )}
+                  {/* Back arrow - only show if we can go back (not 7 days back from today) */}
+                  {(() => {
+                    const currentDate = parseISO(focusedDate);
+                    const todayDate = today;
+                    const daysDiff = differenceInDays(todayDate, currentDate);
+                    return daysDiff < 7 ? (
+                      <ArrowLeft className="h-5 w-5 mr-2 cursor-pointer hover:text-blue-400" onClick={goToPreviousDay} />
+                    ) : null;
+                  })()}
                   {currentDay.toUpperCase()}
+                  {/* Forward arrow - only show if we can go forward (not 7 days forward from today) */}
+                  {(() => {
+                    const currentDate = parseISO(focusedDate);
+                    const todayDate = today;
+                    const daysDiff = differenceInDays(currentDate, todayDate);
+                    return daysDiff < 7 ? (
+                      <ArrowRight className="h-5 w-5 ml-2 cursor-pointer hover:text-blue-400" onClick={goToNextDay} />
+                    ) : null;
+                  })()}
                 </div>
+                {/* Today button - centered and only show if not on today */}
+                {!isCurrentDay(currentDay) && (
+                  <button 
+                    onClick={goToToday}
+                    className="px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-sm rounded border border-green-400 transition-colors font-medium"
+                  >
+                    Today
+                  </button>
+                )}
                 <div className="flex items-center space-x-4">
                   {appointments.some(
                     (apt) =>
@@ -459,21 +549,61 @@ const handleToggleSelfDevPriority = async (id: string, completed: boolean) => {
                   />
                 </div>
               )}
-              {todosForDay.map((task) => (
-                <div key={task.id} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`task-${task.id}`}
-                    checked={task.completed}
-                    onCheckedChange={() => toggleTask(currentDay, task.id)}
-                  />
-                  <label
-                    htmlFor={`task-${task.id}`}
-                    className={`flex-grow ${task.completed ? "line-through text-gray-400 opacity-45" : "text-white"}`}
-                  >
-                    {task.task}
-                  </label>
-                </div>
-              ))}
+              {todosForDay.map((task) => {
+                const subtodos = getSubtodos(task.id);
+                const hasSubtodosCount = subtodos.length > 0;
+                const isExpanded = expandedTodos.has(task.id);
+                
+                return (
+                  <div key={task.id} className="space-y-1">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`task-${task.id}`}
+                        checked={task.completed}
+                        onCheckedChange={() => toggleTask(currentDay, task.id)}
+                      />
+                      <div className="flex items-center space-x-2 flex-grow">
+                        <label
+                          htmlFor={`task-${task.id}`}
+                          className={`${task.completed ? "line-through text-gray-400 opacity-45" : "text-white"}`}
+                        >
+                          {task.task}
+                        </label>
+                        {hasSubtodosCount && (
+                          <button
+                            onClick={() => toggleExpanded(task.id)}
+                            className="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded transition-colors"
+                            title={isExpanded ? "Hide subtasks" : "Show subtasks"}
+                          >
+                            {subtodos.length}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Subtodos */}
+                    {isExpanded && hasSubtodosCount && (
+                      <div className="ml-6 space-y-1">
+                        {subtodos.map((subtask) => (
+                          <div key={subtask.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`subtask-${subtask.id}`}
+                              checked={subtask.completed}
+                              onCheckedChange={() => toggleTask(currentDay, subtask.id)}
+                            />
+                            <label
+                              htmlFor={`subtask-${subtask.id}`}
+                              className={`flex-grow text-sm ${subtask.completed ? "line-through text-gray-400 opacity-45" : "text-gray-300"}`}
+                            >
+                              {subtask.task}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               {appointments.some(
                 (apt) => apt.date === focusedDate,
               ) && (

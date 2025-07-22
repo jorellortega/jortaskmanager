@@ -26,6 +26,7 @@ const navIcons = [
   { href: '/notes', icon: <StickyNote />, color: 'text-yellow-400', glow: '#fde047' },
   { href: '/journal', icon: <BookOpen />, color: 'text-green-400', glow: '#22c55e' },
   { href: '/cycle-tracking', icon: <Heart />, color: 'text-pink-400', glow: '#ec4899' },
+  { href: '/week', icon: <CalendarDays />, color: 'text-green-400', glow: '#22c55e' },
 ];
 
 // Generate a unique instance ID for debugging
