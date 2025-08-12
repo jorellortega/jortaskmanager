@@ -16,8 +16,20 @@ type Peer = {
   id: string
   user_id: string
   peer_user_id: string
-  status: string
+  status: 'pending' | 'accepted' | 'rejected' | 'blocked'
   created_at: string
+  updated_at: string
+}
+
+type PeerRequest = {
+  id: string
+  user_id: string
+  peer_user_id: string
+  status: 'pending' | 'accepted' | 'rejected' | 'blocked'
+  created_at: string
+  updated_at: string
+  requester_email?: string
+  requester_name?: string
 }
 
 export default function PeerSyncPage() {
@@ -26,8 +38,10 @@ export default function PeerSyncPage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [userCode, setUserCode] = useState<string>("")
   const [peers, setPeers] = useState<Peer[]>([])
+  const [peerRequests, setPeerRequests] = useState<PeerRequest[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchUserAndPeers = async () => {
@@ -41,15 +55,31 @@ export default function PeerSyncPage() {
       }
       setUserId(user.id)
       setUserCode(user.id)
-      const { data, error: fetchError } = await supabase
+      // Fetch user's peer connections
+      const { data: peersData, error: peersError } = await supabase
         .from("peers")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
-      if (fetchError) {
+      
+      if (peersError) {
         setError("Failed to fetch peers.")
       } else {
-        setPeers(data || [])
+        setPeers(peersData || [])
+      }
+
+      // Fetch incoming peer requests
+      const { data: requestsData, error: requestsError } = await supabase
+        .from("peers")
+        .select("*")
+        .eq("peer_user_id", user.id)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false })
+      
+      if (requestsError) {
+        setError("Failed to fetch peer requests.")
+      } else {
+        setPeerRequests(requestsData || [])
       }
       setLoading(false)
     }
@@ -91,6 +121,72 @@ export default function PeerSyncPage() {
   const handleScan = (result: string) => {
     setScannedCode(result)
     handleSync(result)
+  }
+
+  const handlePeerRequest = async (requestId: string, action: 'accept' | 'reject') => {
+    if (!userId) return
+    
+    setLoading(true)
+    setError(null)
+    
+    const newStatus = action === 'accept' ? 'accepted' : 'rejected'
+    
+    // Update the peer request status
+    const { data, error } = await supabase
+      .from("peers")
+      .update({ status: newStatus })
+      .eq("id", requestId)
+      .select()
+    
+    if (error) {
+      setError(`Failed to ${action} peer request.`)
+    } else if (data && data.length > 0) {
+      // If accepted, create a reciprocal connection
+      if (action === 'accept') {
+        const { error: reciprocalError } = await supabase
+          .from("peers")
+          .insert([{
+            user_id: userId,
+            peer_user_id: data[0].user_id,
+            status: 'accepted'
+          }])
+        
+        if (reciprocalError) {
+          console.error('Failed to create reciprocal connection:', reciprocalError)
+        }
+      }
+      
+      // Update local state
+      setPeerRequests(prev => prev.filter(req => req.id !== requestId))
+      if (action === 'accept') {
+        setPeers(prev => [...prev, data[0]])
+      }
+      
+      setSuccessMessage(`Peer request ${action}ed successfully!`)
+      setTimeout(() => setSuccessMessage(null), 3000)
+    }
+    setLoading(false)
+  }
+
+  const removePeer = async (peerId: string) => {
+    if (!userId) return
+    
+    setLoading(true)
+    setError(null)
+    
+    const { error } = await supabase
+      .from("peers")
+      .delete()
+      .eq("id", peerId)
+    
+    if (error) {
+      setError("Failed to remove peer.")
+    } else {
+      setPeers(prev => prev.filter(peer => peer.id !== peerId))
+      setSuccessMessage("Peer removed successfully!")
+      setTimeout(() => setSuccessMessage(null), 3000)
+    }
+    setLoading(false)
   }
 
   return (
@@ -156,6 +252,54 @@ export default function PeerSyncPage() {
           </CardContent>
         </Card>
       </div>
+      {/* Peer Requests Section */}
+      {peerRequests.length > 0 && (
+        <Card className="bg-[#141415] border border-gray-700 mb-4">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center">
+              <Users className="mr-2" />
+              Pending Peer Requests ({peerRequests.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {peerRequests.map((request) => (
+                <div key={request.id} className="flex items-center justify-between bg-[#1A1A1B] p-3 rounded border border-gray-700">
+                  <div>
+                    <div className="text-white font-medium">New Peer Request</div>
+                    <div className="text-sm text-gray-400">
+                      User ID: {request.user_id.substring(0, 8)}...
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {format(new Date(request.created_at), "MMM d, yyyy HH:mm")}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => handlePeerRequest(request.id, 'accept')}
+                      className="bg-green-600 hover:bg-green-700"
+                      disabled={loading}
+                    >
+                      Accept
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handlePeerRequest(request.id, 'reject')}
+                      variant="outline"
+                      className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white"
+                      disabled={loading}
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Dialog>
         <DialogTrigger asChild>
           <Button className="w-full mb-4">
@@ -174,7 +318,7 @@ export default function PeerSyncPage() {
               placeholder="Enter scanned code manually"
               value={scannedCode}
               onChange={(e) => setScannedCode(e.target.value)}
-              className="bg-[#1A1A1B] border-gray-700 text-white mb-4"
+              className="bg-[#1A1B] border-gray-700 text-white mb-4"
             />
             <Button onClick={() => handleScan(scannedCode)}>Sync with Scanned Code</Button>
           </div>
@@ -193,32 +337,83 @@ export default function PeerSyncPage() {
           ) : peers.length === 0 ? (
             <p>No peers added yet.</p>
           ) : (
-            <ul className="space-y-2">
+            <div className="space-y-3">
               {peers.map((peer) => (
-                <li key={peer.id} className="flex flex-col md:flex-row md:justify-between md:items-center bg-[#1A1A1B] p-2 rounded">
+                <div key={peer.id} className="flex flex-col md:flex-row md:justify-between md:items-center bg-[#1A1A1B] p-3 rounded border border-gray-700">
                   <div>
-                    <span className="font-semibold">Peer ID:</span> <span className="break-all">{peer.peer_user_id}</span>
+                    <div className="text-white font-medium">
+                      Peer ID: {peer.peer_user_id.substring(0, 8)}...
+                    </div>
+                    <div className="text-sm text-gray-400">
+                      Status: <span className={`px-2 py-1 rounded text-xs ${
+                        peer.status === 'accepted' ? 'bg-green-900 text-green-300' :
+                        peer.status === 'pending' ? 'bg-yellow-900 text-yellow-300' :
+                        peer.status === 'rejected' ? 'bg-red-900 text-red-300' :
+                        'bg-gray-900 text-gray-300'
+                      }`}>
+                        {peer.status}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      Connected: {format(new Date(peer.created_at), "MMM d, yyyy HH:mm")}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 mt-2 md:mt-0">
-                    <span className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300">{peer.status}</span>
-                    <span className="text-xs text-gray-500">{format(new Date(peer.created_at), "MMM d, yyyy HH:mm")}</span>
+                    {peer.status === 'accepted' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => removePeer(peer.id)}
+                        className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white"
+                        disabled={loading}
+                      >
+                        Remove
+                      </Button>
+                    )}
                   </div>
-                </li>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </CardContent>
       </Card>
-      {error && <div className="bg-red-900 text-red-200 p-2 mb-4 rounded">{error}</div>}
-      {/* Under Development Card */}
-      <div className="container mx-auto mt-4 flex justify-center">
-        <Card className="bg-yellow-100 border-yellow-400 text-yellow-900 w-full max-w-md">
-          <CardContent className="flex flex-col items-center">
-            <span className="font-bold text-lg">🚧 Under Development 🚧</span>
-            <span className="text-sm">Peer calendar sync is coming soon.</span>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Success and Error Messages */}
+      {successMessage && (
+        <div className="bg-green-900 text-green-200 p-3 mb-4 rounded border border-green-500">
+          ✅ {successMessage}
+        </div>
+      )}
+      {error && (
+        <div className="bg-red-900 text-red-200 p-3 mb-4 rounded border border-red-500">
+          ❌ {error}
+        </div>
+      )}
+
+      {/* Peer Sync Status */}
+      <Card className="bg-[#141415] border border-gray-700 mb-4">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center">
+            <Users className="mr-2" />
+            Peer Sync Status
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+            <div className="p-3 bg-[#1A1A1B] rounded border border-gray-700">
+              <div className="text-2xl font-bold text-blue-400">{peers.filter(p => p.status === 'accepted').length}</div>
+              <div className="text-sm text-gray-400">Connected Peers</div>
+            </div>
+            <div className="p-3 bg-[#1A1A1B] rounded border border-gray-700">
+              <div className="text-2xl font-bold text-yellow-400">{peerRequests.length}</div>
+              <div className="text-sm text-gray-400">Pending Requests</div>
+            </div>
+            <div className="p-3 bg-[#1A1A1B] rounded border border-gray-700">
+              <div className="text-2xl font-bold text-green-400">{peers.filter(p => p.status === 'pending').length}</div>
+              <div className="text-sm text-gray-400">Outgoing Requests</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

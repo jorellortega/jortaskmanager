@@ -19,11 +19,20 @@ type Peer = {
   id: string
   user_id: string
   peer_user_id: string
-  status: string
-  sync_state: string
-  last_synced: string | null
-  active_features: string[] | null
+  status: 'pending' | 'accepted' | 'rejected' | 'blocked'
   created_at: string
+  updated_at: string
+}
+
+type PeerData = {
+  id: string
+  user_id: string
+  peer_user_id: string
+  category: string
+  data_type: string
+  data_id: string
+  data_content: any
+  shared_at: string
 }
 
 export default function SyncedPeersPage() {
@@ -93,28 +102,54 @@ export default function SyncedPeersPage() {
   }
 
   const syncWithPeer = async (id: string) => {
-    await updatePeer(id, { last_synced: new Date().toISOString() })
+    setError(null)
+    setLoading(true)
+    
+    try {
+      // In a real implementation, this would sync data based on preferences
+      // For now, we'll just show a success message
+      setTimeout(() => {
+        setLoading(false)
+        // You could add a success message here
+      }, 1000)
+    } catch (err) {
+      setError("Failed to sync with peer.")
+      setLoading(false)
+    }
   }
 
-  const togglePauseSync = async (id: string, currentState: string) => {
-    await updatePeer(id, {
-      sync_state: currentState === "paused" ? "active" : "paused"
-    })
+  const togglePauseSync = async (id: string) => {
+    setError(null)
+    setLoading(true)
+    
+    try {
+      // In a real implementation, this would pause/resume sync
+      // For now, we'll just show a success message
+      setTimeout(() => {
+        setLoading(false)
+        // You could add a success message here
+      }, 1000)
+    } catch (err) {
+      setError("Failed to update sync status.")
+      setLoading(false)
+    }
   }
 
   const blockPeer = async (id: string) => {
-    await updatePeer(id, { sync_state: "blocked" })
+    await updatePeer(id, { status: 'blocked' })
     setShowBlockDialog(false)
   }
 
-  const getStatusColor = (sync_state: string) => {
-    switch (sync_state) {
-      case "active":
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "accepted":
         return "bg-green-500"
-      case "paused":
+      case "pending":
         return "bg-yellow-500"
-      case "blocked":
+      case "rejected":
         return "bg-red-500"
+      case "blocked":
+        return "bg-red-600"
       default:
         return "bg-gray-500"
     }
@@ -138,48 +173,44 @@ export default function SyncedPeersPage() {
               <Card key={peer.id} className="bg-[#1a1a1b] border border-gray-700">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${getStatusColor(peer.sync_state)}`}>
-                        {peer.peer_user_id.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <h3 className="text-white font-medium flex items-center gap-2">
-                          Peer: {peer.peer_user_id.slice(0, 8)}...{/* Show partial id for now */}
-                          <span className={`w-2 h-2 rounded-full ${getStatusColor(peer.sync_state)}`} />
-                          {peer.sync_state === "paused" && (
-                            <span className="text-xs px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-300">
-                              Paused
-                            </span>
-                          )}
-                          {peer.sync_state === "blocked" && (
-                            <span className="text-xs px-2 py-0.5 rounded bg-red-500/20 text-red-300">
-                              Blocked
-                            </span>
-                          )}
-                        </h3>
-                        <div className="flex items-center gap-2 text-sm text-gray-400">
-                          <Clock className="h-4 w-4" />
-                          Last synced: {peer.last_synced ? format(new Date(peer.last_synced), "MMM d, yyyy HH:mm") : "Never"}
-                        </div>
-                        {peer.active_features && peer.active_features.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {peer.active_features.map((feature) => (
-                              <span key={feature} className="text-xs bg-blue-900 text-blue-200 px-2 py-0.5 rounded">
-                                {feature}
-                              </span>
-                            ))}
-                          </div>
+                                      <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${getStatusColor(peer.status)}`}>
+                      {peer.peer_user_id.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <h3 className="text-white font-medium flex items-center gap-2">
+                        Peer: {peer.peer_user_id.slice(0, 8)}...
+                        <span className={`w-2 h-2 rounded-full ${getStatusColor(peer.status)}`} />
+                        {peer.status === "pending" && (
+                          <span className="text-xs px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-300">
+                            Pending
+                          </span>
                         )}
+                        {peer.status === "blocked" && (
+                          <span className="text-xs px-2 py-0.5 rounded bg-red-500/20 text-red-300">
+                            Blocked
+                          </span>
+                        )}
+                      </h3>
+                      <div className="flex items-center gap-2 text-sm text-gray-400">
+                        <Clock className="h-4 w-4" />
+                        Connected: {format(new Date(peer.created_at), "MMM d, yyyy HH:mm")}
+                      </div>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        <span className="text-xs bg-blue-900 text-blue-200 px-2 py-0.5 rounded">
+                          {peer.status}
+                        </span>
                       </div>
                     </div>
+                  </div>
                     <div className="flex items-center gap-2">
-                      {peer.sync_state !== "blocked" && (
+                      {peer.status !== "blocked" && (
                         <>
                           <Button
                             onClick={() => syncWithPeer(peer.id)}
                             className="bg-blue-500 hover:bg-blue-600"
                             size="sm"
-                            disabled={peer.sync_state === "paused"}
+                            disabled={peer.status === "pending"}
                           >
                             <Check className="h-4 w-4 mr-1" />
                             Sync Now
@@ -193,14 +224,10 @@ export default function SyncedPeersPage() {
                             <DropdownMenuContent className="bg-[#1a1a1b] border-gray-700 text-white">
                               <DropdownMenuItem
                                 className="hover:bg-[#2a2a2b] cursor-pointer"
-                                onClick={() => togglePauseSync(peer.id, peer.sync_state)}
+                                onClick={() => togglePauseSync(peer.id)}
                               >
-                                {peer.sync_state === "paused" ? (
-                                  <Play className="h-4 w-4 mr-2" />
-                                ) : (
-                                  <Pause className="h-4 w-4 mr-2" />
-                                )}
-                                {peer.sync_state === "paused" ? "Resume Sync" : "Pause Sync"}
+                                <Pause className="h-4 w-4 mr-2" />
+                                Pause Sync
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="hover:bg-[#2a2a2b] cursor-pointer"
@@ -223,7 +250,7 @@ export default function SyncedPeersPage() {
                           </DropdownMenu>
                         </>
                       )}
-                      {peer.sync_state === "blocked" && (
+                      {peer.status === "blocked" && (
                         <Button
                           onClick={() => removePeer(peer.id)}
                           variant="ghost"

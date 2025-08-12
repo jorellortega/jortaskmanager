@@ -1,11 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Users, CalendarDays, Clock, DollarSign, Sun, Dumbbell, Cake, Repeat, Rss, CheckSquare, Target, Lightbulb, Plane, ClockIcon, StickyNote, BookOpen, Utensils } from "lucide-react"
 import Link from "next/link"
+import { supabase } from "@/lib/supabaseClient"
 
 type SyncPreference = {
   id: string
@@ -132,6 +133,45 @@ const defaultPreferences: SyncPreference[] = [
 
 export default function PeerSettingsPage() {
   const [preferences, setPreferences] = useState<SyncPreference[]>(defaultPreferences)
+  const [userId, setUserId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchUserAndPreferences = async () => {
+      setLoading(true)
+      setError(null)
+      
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        setError("You must be logged in to view sync preferences.")
+        setLoading(false)
+        return
+      }
+      setUserId(user.id)
+      
+      // Fetch user's sync preferences from database
+      const { data: prefsData, error: prefsError } = await supabase
+        .from("peer_sync_preferences")
+        .select("*")
+        .eq("user_id", user.id)
+      
+      if (prefsError) {
+        setError("Failed to fetch sync preferences.")
+      } else if (prefsData && prefsData.length > 0) {
+        // Update preferences with database values
+        setPreferences(prev => prev.map(pref => {
+          const dbPref = prefsData.find(p => p.category === pref.id)
+          return dbPref ? { ...pref, enabled: dbPref.enabled } : pref
+        }))
+      }
+      
+      setLoading(false)
+    }
+    
+    fetchUserAndPreferences()
+  }, [])
 
   const togglePreference = (id: string) => {
     setPreferences(prev =>
@@ -141,8 +181,35 @@ export default function PeerSettingsPage() {
     )
   }
 
-  const handleSave = () => {
-    localStorage.setItem("peerSyncPreferences", JSON.stringify(preferences))
+  const handleSave = async () => {
+    if (!userId) return
+    
+    setLoading(true)
+    setError(null)
+    
+    try {
+      // Update all preferences in database
+      const updates = preferences.map(pref => ({
+        user_id: userId,
+        category: pref.id,
+        enabled: pref.enabled
+      }))
+      
+      const { error } = await supabase
+        .from("peer_sync_preferences")
+        .upsert(updates, { onConflict: 'user_id,category' })
+      
+      if (error) {
+        setError("Failed to save preferences.")
+      } else {
+        setSuccessMessage("Preferences saved successfully!")
+        setTimeout(() => setSuccessMessage(null), 3000)
+      }
+    } catch (err) {
+      setError("An error occurred while saving preferences.")
+    }
+    
+    setLoading(false)
   }
 
   return (
@@ -150,6 +217,18 @@ export default function PeerSettingsPage() {
       <Link href="/peersync" className="flex items-center text-blue-500 hover:text-blue-400 mb-4">
         <ArrowLeft className="mr-2" /> Back to PeerSync
       </Link>
+      {/* Success and Error Messages */}
+      {successMessage && (
+        <div className="bg-green-900 text-green-200 p-3 mb-4 rounded border border-green-500">
+          ✅ {successMessage}
+        </div>
+      )}
+      {error && (
+        <div className="bg-red-900 text-red-200 p-3 mb-4 rounded border border-red-500">
+          ❌ {error}
+        </div>
+      )}
+
       <Card className="bg-[#141415] border border-gray-700 mb-4">
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
@@ -185,9 +264,10 @@ export default function PeerSettingsPage() {
           <div className="mt-6 flex justify-end">
             <Button
               onClick={handleSave}
+              disabled={loading}
               className="bg-blue-500 text-white hover:bg-blue-600"
             >
-              Save Changes
+              {loading ? "Saving..." : "Save Changes"}
             </Button>
           </div>
         </CardContent>

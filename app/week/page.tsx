@@ -66,6 +66,7 @@ export default function WeekPlanningPage() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [showSearchResults, setShowSearchResults] = useState(false)
+  const [selectedDayForAssignment, setSelectedDayForAssignment] = useState<string | null>(null)
 
   useEffect(() => {
     const getUserAndTasks = async () => {
@@ -352,6 +353,68 @@ export default function WeekPlanningPage() {
     return categories.find(cat => cat.value === categoryValue) || categories[0]
   }
 
+  const assignToDay = async (result: SearchResult, day: string) => {
+    if (!userId) return
+    
+    setLoading(true)
+    setError(null)
+    
+    // Create a new weekly task from the search result
+    const { data, error } = await supabase
+      .from("weekly_tasks")
+      .insert([{
+        user_id: userId,
+        title: result.title,
+        category: result.type,
+        day_of_week: day,
+        completed: false,
+      }])
+      .select()
+    
+    if (error) {
+      setError("Failed to assign item to day.")
+    } else if (data && data.length > 0) {
+      setWeeklyTasks((prev) => [...prev, ...data])
+      // Show success feedback
+      setError(null)
+      // You can add a success message here if you want
+    }
+    setLoading(false)
+  }
+
+  const reassignTaskDay = async (taskId: string, newDay: string) => {
+    setLoading(true)
+    setError(null)
+    
+    const { data, error } = await supabase
+      .from("weekly_tasks")
+      .update({ day_of_week: newDay })
+      .eq("id", taskId)
+      .select()
+    
+    if (error) {
+      setError("Failed to reassign task to new day.")
+    } else if (data && data.length > 0) {
+      setWeeklyTasks((prev) => prev.map((task) => task.id === taskId ? data[0] : task))
+    }
+    setLoading(false)
+  }
+
+  const handleDayClick = (day: string) => {
+    if (selectedDayForAssignment === day) {
+      setSelectedDayForAssignment(null) // Deselect if clicking same day
+    } else {
+      setSelectedDayForAssignment(day) // Select the clicked day
+    }
+  }
+
+  const assignSearchResultToSelectedDay = async (result: SearchResult) => {
+    if (!selectedDayForAssignment || !userId) return
+    
+    await assignToDay(result, selectedDayForAssignment)
+    setSelectedDayForAssignment(null) // Clear selection after assignment
+  }
+
   if (error) {
     return <div className="text-red-500 p-4">{error}</div>
   }
@@ -360,11 +423,33 @@ export default function WeekPlanningPage() {
   }
 
   return (
-    <div className="container mx-auto p-4 bg-black min-h-screen text-white">
+    <div className="container mx-auto p-4 text-white">
       <Link href="/dashboard" className="flex items-center text-blue-500 hover:text-blue-400 mb-4">
         <ArrowLeft className="mr-2" /> Back to Dashboard
       </Link>
       <h1 className="text-3xl font-bold mb-6">Weekly Planning</h1>
+      
+      {/* Day Selection Indicator */}
+      {selectedDayForAssignment && (
+        <div className="mb-4 p-3 bg-blue-900/20 border border-blue-500 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div className="text-blue-400 font-medium">
+              🎯 Selected Day: <span className="text-white">{selectedDayForAssignment}</span>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setSelectedDayForAssignment(null)}
+              className="text-blue-400 border-blue-400 hover:bg-blue-400 hover:text-white"
+            >
+              Clear Selection
+            </Button>
+          </div>
+          <div className="text-sm text-blue-300 mt-1">
+            Click on any search result below to assign it to {selectedDayForAssignment}
+          </div>
+        </div>
+      )}
       
       {/* Search Bar */}
       <Card className="bg-[#141415] border border-gray-700 mb-6">
@@ -415,11 +500,39 @@ export default function WeekPlanningPage() {
                             </div>
                           </div>
                         </div>
-                        {result.completed !== undefined && (
-                          <div className={`text-xs px-2 py-1 rounded ${result.completed ? 'bg-green-900 text-green-300' : 'bg-gray-700 text-gray-300'}`}>
-                            {result.completed ? 'Completed' : 'Pending'}
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {result.completed !== undefined && (
+                            <div className={`text-xs px-2 py-1 rounded ${result.completed ? 'bg-green-900 text-green-300' : 'bg-gray-700 text-gray-300'}`}>
+                              {result.completed ? 'Completed' : 'Pending'}
+                            </div>
+                          )}
+                          {selectedDayForAssignment && !weeklyTasks.some(task => task.title === result.title) ? (
+                            <Button
+                              size="sm"
+                              onClick={() => assignSearchResultToSelectedDay(result)}
+                              className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                            >
+                              Assign to {selectedDayForAssignment}
+                            </Button>
+                          ) : (
+                            <Select
+                              value=""
+                              onValueChange={(day) => assignToDay(result, day)}
+                              disabled={weeklyTasks.some(task => task.title === result.title)}
+                            >
+                              <SelectTrigger className="h-8 w-24 text-xs bg-[#1A1A1B] border-gray-700 text-white">
+                                <SelectValue placeholder={weeklyTasks.some(task => task.title === result.title) ? "Assigned" : "Assign"} />
+                              </SelectTrigger>
+                              <SelectContent className="bg-[#18181b] text-white">
+                                {daysOfWeek.map((day) => (
+                                  <SelectItem key={day} value={day} className="text-white text-xs">
+                                    {day}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -501,10 +614,21 @@ export default function WeekPlanningPage() {
         {daysOfWeek.map((day) => {
           const dayTasks = weeklyTasks.filter(task => task.day_of_week === day)
           return (
-            <Card key={day} className="bg-[#141415] border border-gray-700">
+            <Card 
+              key={day} 
+              className={`bg-[#141415] border cursor-pointer transition-all duration-200 ${
+                selectedDayForAssignment === day 
+                  ? 'border-blue-500 bg-[#1A1A1B] ring-2 ring-blue-500/50' 
+                  : 'border-gray-700 hover:border-gray-600'
+              }`}
+              onClick={() => handleDayClick(day)}
+            >
               <CardHeader className="pb-3">
                 <CardTitle className="text-white text-lg">{day}</CardTitle>
                 <div className="text-sm text-gray-400">{dayTasks.length} tasks</div>
+                {selectedDayForAssignment === day && (
+                  <div className="text-xs text-blue-400 font-medium">Click search results to assign here</div>
+                )}
               </CardHeader>
               <CardContent className="space-y-2">
                 {dayTasks.length === 0 ? (
@@ -584,8 +708,25 @@ export default function WeekPlanningPage() {
                                 </Button>
                               </div>
                             </div>
-                            <div className={`text-xs ${categoryInfo.color} font-medium`}>
-                              {getCategoryInfo(task.category).label}
+                            <div className="flex items-center justify-between">
+                              <div className={`text-xs ${categoryInfo.color} font-medium`}>
+                                {getCategoryInfo(task.category).label}
+                              </div>
+                              <Select
+                                value={task.day_of_week}
+                                onValueChange={(newDay) => reassignTaskDay(task.id, newDay)}
+                              >
+                                <SelectTrigger className="h-6 w-20 text-xs bg-[#1A1A1B] border-gray-700 text-white">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="bg-[#18181b] text-white">
+                                  {daysOfWeek.map((d) => (
+                                    <SelectItem key={d} value={d} className="text-white text-xs">
+                                      {d}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
                           </div>
                         )}
