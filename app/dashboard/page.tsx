@@ -32,6 +32,8 @@ import {
   Briefcase,
   Rss,
   Trophy,
+  Edit2,
+  Trash2,
 } from "lucide-react"
 import { format, addDays, startOfWeek, parseISO, differenceInDays, subDays } from "date-fns"
 import Link from "next/link"
@@ -112,7 +114,16 @@ export default function WeeklyTaskManager() {
   const [error, setError] = useState<string | null>(null)
   const [addingTask, setAddingTask] = useState(false)
   const [newTaskText, setNewTaskText] = useState("")
+  const [subtasks, setSubtasks] = useState<string[]>([""])
   const [expandedTodos, setExpandedTodos] = useState<Set<string>>(new Set())
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
+  const [editingTaskText, setEditingTaskText] = useState<string>("")
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null)
+  const [editingSubtaskText, setEditingSubtaskText] = useState<string>("")
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; type: 'task' | 'subtask'; name: string } | null>(null)
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null)
+  const [activeSubtaskId, setActiveSubtaskId] = useState<string | null>(null)
   const router = useRouter();
   const [focusedDate, setFocusedDate] = useState<string>("");
 
@@ -194,19 +205,23 @@ export default function WeeklyTaskManager() {
   const addTask = (day: string) => {
     setAddingTask(true)
     setNewTaskText("")
+    setSubtasks([""])
   }
 
   const handleAddTaskConfirm = async () => {
     if (!userId || !focusedDate || !newTaskText.trim()) {
       setAddingTask(false)
       setNewTaskText("")
+      setSubtasks([""])
       return
     }
     setLoading(true)
     setError(null)
     // Use focusedDate directly instead of calculating from currentDay
     const dueDate = focusedDate
-    const { data, error: insertError } = await supabase
+    
+    // Insert main todo
+    const { data: mainData, error: insertError } = await supabase
       .from("todos")
       .insert([
         {
@@ -214,22 +229,60 @@ export default function WeeklyTaskManager() {
           task: newTaskText.trim(),
           due_date: dueDate,
           completed: false,
+          parent_id: null,
         },
       ])
       .select()
+    
     if (insertError) {
       setError(insertError.message || "Failed to add task.")
-    } else if (data && data.length > 0) {
-      setTodos((prev) => [...prev, data[0]])
+      setLoading(false)
+      return
     }
+    
+    let newMainTodo = mainData && mainData[0]
+    let newTodos = newMainTodo ? [newMainTodo] : []
+    
+    // Insert subtasks if any
+    if (newMainTodo && subtasks.some((s) => s.trim() !== "")) {
+      const subtaskInserts = subtasks
+        .filter((s) => s.trim() !== "")
+        .map((s) => ({
+          user_id: userId,
+          task: s.trim(),
+          due_date: null,
+          completed: false,
+          parent_id: newMainTodo.id,
+        }))
+      
+      if (subtaskInserts.length > 0) {
+        const { data: subData, error: subError } = await supabase
+          .from("todos")
+          .insert(subtaskInserts)
+          .select()
+        
+        if (subError) {
+          setError(subError.message || "Failed to add subtasks. Please try again.")
+        } else if (subData && subData.length > 0) {
+          newTodos = [...newTodos, ...subData]
+        }
+      }
+    }
+    
+    if (newTodos.length > 0) {
+      setTodos((prev) => [...prev, ...newTodos])
+    }
+    
     setAddingTask(false)
     setNewTaskText("")
+    setSubtasks([""])
     setLoading(false)
   }
 
   const handleAddTaskCancel = () => {
     setAddingTask(false)
     setNewTaskText("")
+    setSubtasks([""])
   }
 
   const toggleTask = async (day: string, taskId: string) => {
@@ -436,21 +489,135 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
   }
   setLoading(false);
 };
-const handleToggleSelfDevPriority = async (id: string, completed: boolean) => {
-  setLoading(true);
-  setError(null);
-  const { data, error } = await supabase
-    .from("self_development_priorities")
-    .update({ completed: !completed })
-    .eq("id", id)
-    .select();
-  if (error) {
-    setError(error.message || "Failed to update self-development priority.");
-  } else if (data && data.length > 0) {
-    setSelfDevPriorities((prev) => prev.map((a) => (a.id === id ? data[0] : a)));
-  }
-  setLoading(false);
-};
+  const handleToggleSelfDevPriority = async (id: string, completed: boolean) => {
+    setLoading(true);
+    setError(null);
+    const { data, error } = await supabase
+      .from("self_development_priorities")
+      .update({ completed: !completed })
+      .eq("id", id)
+      .select();
+    if (error) {
+      setError(error.message || "Failed to update self-development priority.");
+    } else if (data && data.length > 0) {
+      setSelfDevPriorities((prev) => prev.map((a) => (a.id === id ? data[0] : a)));
+    }
+    setLoading(false);
+  };
+
+  // Edit task functions
+  const saveEditingTask = async (id: string) => {
+    if (!editingTaskText.trim()) return;
+    setLoading(true);
+    setError(null);
+    const { data, error: updateError } = await supabase
+      .from("todos")
+      .update({ task: editingTaskText.trim() })
+      .eq("id", id)
+      .select();
+    if (updateError) {
+      setError(updateError.message || "Failed to update task text.");
+    } else if (data && data.length > 0) {
+      setTodos((prev) => prev.map((todo) => (todo.id === id ? data[0] : todo)));
+      setEditingTaskId(null);
+      setEditingTaskText("");
+    }
+    setLoading(false);
+  };
+
+  const saveEditingSubtask = async (id: string) => {
+    if (!editingSubtaskText.trim()) return;
+    setLoading(true);
+    setError(null);
+    const { data, error: updateError } = await supabase
+      .from("todos")
+      .update({ task: editingSubtaskText.trim() })
+      .eq("id", id)
+      .select();
+    if (updateError) {
+      setError(updateError.message || "Failed to update subtask text.");
+    } else if (data && data.length > 0) {
+      setTodos((prev) => prev.map((todo) => (todo.id === id ? data[0] : todo)));
+      setEditingSubtaskId(null);
+      setEditingSubtaskText("");
+    }
+    setLoading(false);
+  };
+
+  // Delete task functions
+  const confirmDeleteTodo = (id: string, name: string) => {
+    setDeleteTarget({ id, type: 'task', name });
+    setShowDeleteConfirm(true);
+  };
+
+  const deleteTodo = async (id: string) => {
+    setError(null);
+    setLoading(true);
+    // First delete all subtasks
+    const { error: deleteSubtasksError } = await supabase
+      .from("todos")
+      .delete()
+      .eq("parent_id", id);
+    
+    if (deleteSubtasksError) {
+      setError(deleteSubtasksError.message || "Failed to delete subtasks.");
+      setLoading(false);
+      return;
+    }
+    
+    // Then delete the main task
+    const { error: deleteError } = await supabase
+      .from("todos")
+      .delete()
+      .eq("id", id);
+    
+    if (deleteError) {
+      setError(deleteError.message || "Failed to delete task.");
+    } else {
+      setTodos((prev) => prev.filter((todo) => todo.id !== id));
+    }
+    setLoading(false);
+    setShowDeleteConfirm(false);
+    setDeleteTarget(null);
+  };
+
+  const confirmDeleteSubtask = (id: string, name: string) => {
+    setDeleteTarget({ id, type: 'subtask', name });
+    setShowDeleteConfirm(true);
+  };
+
+  const deleteSubtask = async (id: string) => {
+    setError(null);
+    setLoading(true);
+    const { error: deleteError } = await supabase
+      .from("todos")
+      .delete()
+      .eq("id", id);
+    
+    if (deleteError) {
+      setError(deleteError.message || "Failed to delete subtask.");
+    } else {
+      setTodos((prev) => prev.filter((todo) => todo.id !== id));
+    }
+    setLoading(false);
+    setShowDeleteConfirm(false);
+    setDeleteTarget(null);
+  };
+
+  // Close active states when editing starts
+  const startEditingTask = (id: string, currentText: string) => {
+    setEditingTaskId(id);
+    setEditingTaskText(currentText);
+    setActiveTaskId(null);
+    setActiveSubtaskId(null);
+  };
+
+  const startEditingSubtask = (id: string, currentText: string) => {
+    setEditingSubtaskId(id);
+    setEditingSubtaskText(currentText);
+    setActiveTaskId(null);
+    setActiveSubtaskId(null);
+  };
 
   return (
     <div className="container mx-auto p-4 pb-24">
@@ -533,20 +700,73 @@ const handleToggleSelfDevPriority = async (id: string, completed: boolean) => {
             {/* Add this to the focused day card content to display leisure activities: */}
             <CardContent className="p-2 space-y-4">
               {addingTask && (
-                <div className="flex items-center space-x-2 mb-2">
-                  <Checkbox disabled checked={false} />
-                  <input
-                    autoFocus
-                    className="flex-grow p-1 rounded bg-[#18181A] border border-gray-700 text-white outline-none"
-                    placeholder="Enter new task..."
-                    value={newTaskText}
-                    onChange={e => setNewTaskText(e.target.value)}
-                    onBlur={handleAddTaskConfirm}
-                    onKeyDown={e => {
-                      if (e.key === "Enter") handleAddTaskConfirm()
-                      if (e.key === "Escape") handleAddTaskCancel()
-                    }}
-                  />
+                <div className="space-y-2 mb-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox disabled checked={false} />
+                    <input
+                      autoFocus
+                      className="flex-grow p-1 rounded bg-[#18181A] border border-gray-700 text-white outline-none"
+                      placeholder="Enter new task..."
+                      value={newTaskText}
+                      onChange={e => setNewTaskText(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          handleAddTaskConfirm()
+                        }
+                        if (e.key === "Escape") handleAddTaskCancel()
+                      }}
+                    />
+                  </div>
+                  {/* Dynamic subtasks */}
+                  {newTaskText.trim() && (
+                    <div className="ml-6">
+                      <div className="text-xs text-gray-400 mb-2">Subtasks:</div>
+                      {subtasks.map((sub, idx) => (
+                        <div key={idx} className="flex items-center space-x-2 mb-2">
+                          <Checkbox disabled checked={false} />
+                          <input
+                            type="text"
+                            value={sub}
+                            onChange={e => {
+                              const newSubs = [...subtasks]
+                              newSubs[idx] = e.target.value
+                              // If last input and not empty, add another
+                              if (idx === subtasks.length - 1 && e.target.value.trim() !== "") {
+                                newSubs.push("")
+                              }
+                              // Remove empty subtasks except the last one
+                              if (idx !== subtasks.length - 1 && e.target.value.trim() === "") {
+                                newSubs.splice(idx, 1)
+                              }
+                              setSubtasks(newSubs)
+                            }}
+                            placeholder={`Subtask ${idx + 1}`}
+                            className="flex-grow p-1 rounded bg-[#18181A] border border-gray-700 text-white outline-none"
+                          />
+                        </div>
+                      ))}
+                      
+                      {/* Action buttons */}
+                      <div className="flex space-x-2">
+                        <Button 
+                          onClick={handleAddTaskConfirm}
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-500"
+                        >
+                          Add Task
+                        </Button>
+                        <Button 
+                          onClick={handleAddTaskCancel}
+                          size="sm"
+                          variant="outline"
+                          className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {todosForDay.map((task) => {
@@ -556,47 +776,165 @@ const handleToggleSelfDevPriority = async (id: string, completed: boolean) => {
                 
                 return (
                   <div key={task.id} className="space-y-1">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`task-${task.id}`}
-                        checked={task.completed}
-                        onCheckedChange={() => toggleTask(currentDay, task.id)}
-                      />
+                    <div 
+                      className="flex items-center space-x-2 p-2 rounded-lg hover:bg-[#1a1a1b] transition-colors cursor-pointer"
+                      onClick={() => setActiveTaskId(activeTaskId === task.id ? null : task.id)}
+                    >
+                                              <Checkbox
+                          id={`task-${task.id}`}
+                          checked={task.completed}
+                          onCheckedChange={() => toggleTask(currentDay, task.id)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
                       <div className="flex items-center space-x-2 flex-grow">
-                        <label
-                          htmlFor={`task-${task.id}`}
-                          className={`${task.completed ? "line-through text-gray-400 opacity-45" : "text-white"}`}
-                        >
-                          {task.task}
-                        </label>
+                        {editingTaskId === task.id ? (
+                          <input
+                            type="text"
+                            value={editingTaskText}
+                            autoFocus
+                            onChange={e => setEditingTaskText(e.target.value)}
+                            onBlur={() => saveEditingTask(task.id)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") {
+                                saveEditingTask(task.id)
+                              }
+                              if (e.key === "Escape") {
+                                setEditingTaskId(null)
+                                setEditingTaskText("")
+                              }
+                            }}
+                            className="flex-grow p-1 rounded bg-[#18181A] border border-gray-700 text-white outline-none"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        ) : (
+                          <label
+                            htmlFor={`task-${task.id}`}
+                            className={`${task.completed ? "line-through text-gray-400 opacity-45" : "text-white"} cursor-pointer hover:underline`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startEditingTask(task.id, task.task);
+                            }}
+                            title="Click to edit"
+                          >
+                            {task.task}
+                          </label>
+                        )}
                         {hasSubtodosCount && (
                           <button
-                            onClick={() => toggleExpanded(task.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleExpanded(task.id);
+                            }}
                             className="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded transition-colors"
                             title={isExpanded ? "Hide subtasks" : "Show subtasks"}
                           >
-                            {subtodos.length}
+                            {subtodos.length} subtask{subtodos.length !== 1 ? 's' : ''}
                           </button>
                         )}
                       </div>
+                      
+                      {/* Action buttons - only show when active */}
+                      {activeTaskId === task.id && (
+                        <div className="flex items-center space-x-1 animate-in slide-in-from-right-2 duration-200">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startEditingTask(task.id, task.task);
+                            }}
+                            className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
+                            title="Edit task"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              confirmDeleteTodo(task.id, task.task);
+                            }}
+                            className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                            title="Delete task"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                     
                     {/* Subtodos */}
                     {isExpanded && hasSubtodosCount && (
                       <div className="ml-6 space-y-1">
                         {subtodos.map((subtask) => (
-                          <div key={subtask.id} className="flex items-center space-x-2">
+                          <div 
+                            key={subtask.id} 
+                            className="flex items-center space-x-2 p-1 rounded-lg hover:bg-[#1a1a1b] transition-colors cursor-pointer ml-6"
+                            onClick={() => setActiveSubtaskId(activeSubtaskId === subtask.id ? null : subtask.id)}
+                          >
                             <Checkbox
                               id={`subtask-${subtask.id}`}
                               checked={subtask.completed}
                               onCheckedChange={() => toggleTask(currentDay, subtask.id)}
+                              onClick={(e) => e.stopPropagation()}
                             />
-                            <label
-                              htmlFor={`subtask-${subtask.id}`}
-                              className={`flex-grow text-sm ${subtask.completed ? "line-through text-gray-400 opacity-45" : "text-gray-300"}`}
-                            >
-                              {subtask.task}
-                            </label>
+                            <div className="flex items-center space-x-2 flex-grow">
+                              {editingSubtaskId === subtask.id ? (
+                                <input
+                                  type="text"
+                                  value={editingSubtaskText}
+                                  autoFocus
+                                  onChange={e => setEditingSubtaskText(e.target.value)}
+                                  onBlur={() => saveEditingSubtask(subtask.id)}
+                                  onKeyDown={e => {
+                                    if (e.key === "Enter") {
+                                      saveEditingSubtask(subtask.id)
+                                    }
+                                    if (e.key === "Escape") {
+                                      setEditingSubtaskId(null)
+                                      setEditingSubtaskText("")
+                                    }
+                                  }}
+                                  className="flex-grow p-1 rounded bg-[#18181A] border border-gray-700 text-white outline-none text-sm"
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              ) : (
+                                <label
+                                  htmlFor={`subtask-${subtask.id}`}
+                                  className={`flex-grow text-sm ${subtask.completed ? "line-through text-gray-400 opacity-45" : "text-gray-300"} cursor-pointer hover:underline`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    startEditingSubtask(subtask.id, subtask.task);
+                                  }}
+                                  title="Click to edit"
+                                >
+                                  {subtask.task}
+                                </label>
+                              )}
+                            </div>
+                            
+                            {/* Subtask action buttons - only show when active */}
+                            {activeSubtaskId === subtask.id && (
+                              <div className="flex items-center space-x-1 animate-in slide-in-from-right-2 duration-200">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    startEditingSubtask(subtask.id, subtask.task);
+                                  }}
+                                  className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
+                                  title="Edit subtask"
+                                >
+                                  <Edit2 className="h-3 w-3" />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    confirmDeleteSubtask(subtask.id, subtask.task);
+                                  }}
+                                  className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                                  title="Delete subtask"
+                                >
+                                    <Trash2 className="h-3 w-3" />
+                                </button>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -707,9 +1045,11 @@ const handleToggleSelfDevPriority = async (id: string, completed: boolean) => {
                   </ul>
                 </div>
               )}
-              <Button onClick={() => addTask(currentDay)} className="w-full" disabled={addingTask}>
-                Add Task
-              </Button>
+              {!addingTask && (
+                <Button onClick={() => addTask(currentDay)} className="w-full">
+                  Add Task
+                </Button>
+              )}
             </CardContent>
           </div>
         </Card>
@@ -798,6 +1138,55 @@ const handleToggleSelfDevPriority = async (id: string, completed: boolean) => {
       </nav>
       {error && <div className="bg-red-900 text-red-200 p-2 mb-4 rounded">{error}</div>}
       {loading && <div className="text-blue-300 mb-2">Loading...</div>}
+      
+      {/* Custom Delete Confirmation Dialog */}
+      {showDeleteConfirm && deleteTarget && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-[#1a1a1b] border border-gray-700 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center">
+                <Trash2 className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">Confirm Deletion</h3>
+                <p className="text-sm text-gray-400">This action cannot be undone</p>
+              </div>
+            </div>
+            
+            <p className="text-gray-300 mb-6">
+              Are you sure you want to delete{' '}
+              <span className="font-semibold text-white">
+                "{deleteTarget.name}"
+              </span>
+              {deleteTarget.type === 'task' ? ' and all its subtasks' : ''}?
+            </p>
+            
+            <div className="flex space-x-3">
+              <button
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setDeleteTarget(null);
+                }}
+                className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-md transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (deleteTarget.type === 'task') {
+                    deleteTodo(deleteTarget.id);
+                  } else {
+                    deleteSubtask(deleteTarget.id);
+                  }
+                }}
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-md transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

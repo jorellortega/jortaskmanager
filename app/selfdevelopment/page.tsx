@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
-import { ArrowLeft, Calendar, Trash2, Edit2, Trophy } from "lucide-react";
+import { ArrowLeft, Calendar, Trash2, Edit2, Trophy, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { format, parseISO } from "date-fns"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
@@ -18,6 +18,7 @@ export type SelfDevPriority = {
   due_date_only?: string | null;
   due_datetime?: string | null;
   created_at?: string;
+  parent_id?: string | null;
 };
 
 // Helper to format due_date correctly (avoiding UTC shift for date-only strings)
@@ -34,6 +35,8 @@ export default function SelfDevelopmentPage() {
   const [priorities, setPriorities] = useState<SelfDevPriority[]>([]);
   // New: separate state for date-only and datetime
   const [newPriority, setNewPriority] = useState("");
+  const [subtasks, setSubtasks] = useState<string[]>([""]);
+  const [subtaskInputs, setSubtaskInputs] = useState<{ [parentId: string]: string }>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -85,27 +88,58 @@ export default function SelfDevelopmentPage() {
       let insertObj: any = {
         user_id: userId,
         title: newPriority.trim(),
+        parent_id: null,
       };
       if (newDueDateOnly && !newDueTime) {
         insertObj.due_date_only = newDueDateOnly;
       } else if (newDueDateOnly && newDueTime) {
         insertObj.due_datetime = `${newDueDateOnly}T${newDueTime}`;
       }
-      const { data, error: insertError } = await supabase
+      
+      // Insert main priority
+      const { data: mainData, error: insertError } = await supabase
         .from("self_development_priorities")
         .insert([insertObj])
         .select();
       if (insertError) {
         setError(insertError.message || "Failed to add priority. Please try again.");
-      } else if (data && data.length > 0) {
-        setPriorities((prev) => [...prev, data[0]]);
-        setNewPriority("");
-        setNewDueDateOnly("");
-        setNewDueTime("");
-        setShowDateTime(false);
-      } else {
-        setError("No data returned from Supabase. Check your table schema and required fields.");
+        setLoading(false);
+        return;
       }
+      
+      let newMainPriority = mainData && mainData[0];
+      let newPriorities = newMainPriority ? [newMainPriority] : [];
+      
+      // Insert subtasks if any
+      if (newMainPriority && subtasks.some((s) => s.trim() !== "")) {
+        const subtaskInserts = subtasks
+          .filter((s) => s.trim() !== "")
+          .map((s) => ({
+            user_id: userId,
+            title: s.trim(),
+            due_date_only: null,
+            due_datetime: null,
+            parent_id: newMainPriority.id,
+          }));
+        if (subtaskInserts.length > 0) {
+          const { data: subData, error: subError } = await supabase
+            .from("self_development_priorities")
+            .insert(subtaskInserts)
+            .select();
+          if (subError) {
+            setError(subError.message || "Failed to add subtasks. Please try again.");
+          } else if (subData && subData.length > 0) {
+            newPriorities = [...newPriorities, ...subData];
+          }
+        }
+      }
+      
+      setPriorities((prev) => [...prev, ...newPriorities]);
+      setNewPriority("");
+      setNewDueDateOnly("");
+      setNewDueTime("");
+      setShowDateTime(false);
+      setSubtasks([""]);
       setLoading(false);
     }
   };
@@ -171,6 +205,48 @@ export default function SelfDevelopmentPage() {
     setLoading(false);
   };
 
+  // Add subtask to existing priority
+  const addSubtask = async (parentId: string) => {
+    setError(null);
+    if (!userId) {
+      setError("You must be logged in to add subtasks.");
+      return;
+    }
+    const subtaskText = subtaskInputs[parentId]?.trim();
+    if (subtaskText) {
+      setLoading(true);
+      const { data, error: insertError } = await supabase
+        .from("self_development_priorities")
+        .insert([
+          {
+            user_id: userId,
+            title: subtaskText,
+            due_date_only: null,
+            due_datetime: null,
+            parent_id: parentId,
+          },
+        ])
+        .select();
+      if (insertError) {
+        setError(insertError.message || "Failed to add subtask. Please try again.");
+      } else if (data && data.length > 0) {
+        setPriorities((prev) => [...prev, data[0]]);
+        setSubtaskInputs((prev) => ({ ...prev, [parentId]: "" }));
+      }
+      setLoading(false);
+    }
+  };
+
+  // Group priorities by parent_id
+  const mainPriorities = priorities.filter((priority) => !priority.parent_id);
+  const subtasksByParent: { [parentId: string]: SelfDevPriority[] } = {};
+  priorities.forEach((priority) => {
+    if (priority.parent_id) {
+      if (!subtasksByParent[priority.parent_id]) subtasksByParent[priority.parent_id] = [];
+      subtasksByParent[priority.parent_id].push(priority);
+    }
+  });
+
   if (error) {
     return <div className="text-red-500 p-4">{error}</div>;
   }
@@ -209,6 +285,27 @@ export default function SelfDevelopmentPage() {
                 <Calendar className="w-5 h-5 text-blue-400" />
               </button>
             </div>
+            
+            {/* Dynamic subtasks */}
+            {newPriority.trim() && subtasks.map((sub, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <Input
+                  type="text"
+                  value={sub}
+                  onChange={e => {
+                    const newSubs = [...subtasks];
+                    newSubs[idx] = e.target.value;
+                    // If last input and not empty, add another
+                    if (idx === subtasks.length - 1 && e.target.value.trim() !== "") {
+                      newSubs.push("");
+                    }
+                    setSubtasks(newSubs);
+                  }}
+                  placeholder={`Subtask ${idx + 1}`}
+                  className="bg-[#1A1A1B] border-gray-700 text-white placeholder-gray-400 w-full"
+                />
+              </div>
+            ))}
             {showDateTime && (
               <div className="flex items-center gap-2 mt-2">
                 <Input
@@ -257,11 +354,11 @@ export default function SelfDevelopmentPage() {
           <CardTitle className="!text-white">Your Self-Development Priorities</CardTitle>
         </CardHeader>
         <CardContent>
-          {priorities.length === 0 ? (
+          {mainPriorities.length === 0 ? (
             <p>No self-development priorities added yet.</p>
           ) : (
-            <ul className="space-y-2">
-              {priorities.map((priority) => (
+            <div className="space-y-4">
+              {mainPriorities.map((priority) => (
                 <li key={priority.id} className="bg-[#1A1A1B] p-2 rounded flex items-center justify-between !text-white">
                   {editingId === priority.id ? (
                     <>
@@ -351,26 +448,11 @@ export default function SelfDevelopmentPage() {
                   )}
                 </li>
               ))}
-            </ul>
+            </div>
           )}
         </CardContent>
       </Card>
-      <Card className="bg-[#141415] border border-gray-700 mt-6">
-        <CardHeader>
-          <CardTitle className="text-green-400 flex items-center"><Calendar className="w-5 h-5 mr-2 text-blue-400" />How Self-Development Appears on Dashboard</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <h3 className="text-green-400 font-bold mb-2">Self-Development:</h3>
-          <ul className="list-disc list-inside">
-            {priorities.slice(0, 2).map((priority) => (
-              <li key={priority.id} className="text-white">
-                {priority.title}
-              </li>
-            ))}
-            <li className="text-gray-400">...and more</li>
-          </ul>
-        </CardContent>
-      </Card>
+
     </div>
   );
 } 
