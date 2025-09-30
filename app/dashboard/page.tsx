@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   ChevronLeft,
   ChevronRight,
@@ -34,6 +35,7 @@ import {
   Trophy,
   Edit2,
   Trash2,
+  Plus,
 } from "lucide-react"
 import { format, addDays, startOfWeek, parseISO, differenceInDays, subDays } from "date-fns"
 import Link from "next/link"
@@ -82,6 +84,7 @@ type WorkPriority = {
   due_datetime?: string;
   created_at?: string;
   completed: boolean;
+  parent_id?: string | null;
 };
 
 type SelfDevPriority = {
@@ -92,6 +95,7 @@ type SelfDevPriority = {
   due_datetime?: string;
   created_at?: string;
   completed: boolean;
+  parent_id?: string | null;
 };
 
 const allDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -121,9 +125,29 @@ export default function WeeklyTaskManager() {
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null)
   const [editingSubtaskText, setEditingSubtaskText] = useState<string>("")
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; type: 'task' | 'subtask'; name: string } | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; type: 'task' | 'subtask' | 'work' | 'work-subtask' | 'selfdev' | 'selfdev-subtask' | 'leisure' | 'fitness'; name: string } | null>(null)
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null)
   const [activeSubtaskId, setActiveSubtaskId] = useState<string | null>(null)
+  const [activeWorkId, setActiveWorkId] = useState<string | null>(null)
+  const [activeWorkSubtaskId, setActiveWorkSubtaskId] = useState<string | null>(null)
+  const [activeSelfDevId, setActiveSelfDevId] = useState<string | null>(null)
+  const [activeSelfDevSubtaskId, setActiveSelfDevSubtaskId] = useState<string | null>(null)
+  const [activeLeisureId, setActiveLeisureId] = useState<string | null>(null)
+  const [activeFitnessId, setActiveFitnessId] = useState<string | null>(null)
+  const [editingWorkId, setEditingWorkId] = useState<string | null>(null)
+  const [editingWorkText, setEditingWorkText] = useState<string>("")
+  const [editingWorkSubtaskId, setEditingWorkSubtaskId] = useState<string | null>(null)
+  const [editingWorkSubtaskText, setEditingWorkSubtaskText] = useState<string>("")
+  const [editingSelfDevId, setEditingSelfDevId] = useState<string | null>(null)
+  const [editingSelfDevText, setEditingSelfDevText] = useState<string>("")
+  const [editingSelfDevSubtaskId, setEditingSelfDevSubtaskId] = useState<string | null>(null)
+  const [editingSelfDevSubtaskText, setEditingSelfDevSubtaskText] = useState<string>("")
+  const [editingLeisureId, setEditingLeisureId] = useState<string | null>(null)
+  const [editingLeisureText, setEditingLeisureText] = useState<string>("")
+  const [editingFitnessId, setEditingFitnessId] = useState<string | null>(null)
+  const [editingFitnessText, setEditingFitnessText] = useState<string>("")
+  const [subtaskInputs, setSubtaskInputs] = useState<{ [parentId: string]: string }>({})
+  const [addingSubtaskTo, setAddingSubtaskTo] = useState<string | null>(null)
   const router = useRouter();
   const [focusedDate, setFocusedDate] = useState<string>("");
 
@@ -397,7 +421,12 @@ export default function WeeklyTaskManager() {
 
   // Use focusedDate directly for filtering - only show parent todos (no parent_id)
   const todosForDay = todos.filter((todo) => todo.due_date === focusedDate && !todo.parent_id);
+  
+  // Filter work priorities - only show parents for the focused day
   const workPrioritiesForDay = workPriorities.filter((wp) => {
+    // Only show parent work priorities (no parent_id)
+    if (wp.parent_id) return false;
+    
     // Use due_date_only if present, else due_datetime
     if (wp.due_date_only) {
       return wp.due_date_only === focusedDate;
@@ -408,6 +437,9 @@ export default function WeeklyTaskManager() {
   });
 
   const selfDevPrioritiesForDay = selfDevPriorities.filter((sd) => {
+    // Only show parent priorities (no parent_id)
+    if (sd.parent_id) return false;
+    
     if (sd.due_date_only) {
       return sd.due_date_only === focusedDate;
     } else if (sd.due_datetime) {
@@ -415,6 +447,16 @@ export default function WeeklyTaskManager() {
     }
     return false;
   });
+  
+  // Helper to get work priority subtasks
+  const getWorkSubtasks = (parentId: string) => {
+    return workPriorities.filter(wp => wp.parent_id === parentId);
+  };
+  
+  // Helper to get self-dev subtasks
+  const getSelfDevSubtasks = (parentId: string) => {
+    return selfDevPriorities.filter(sd => sd.parent_id === parentId);
+  };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -619,6 +661,402 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
     setActiveSubtaskId(null);
   };
 
+  // Work Priority Edit Functions
+  const startEditingWork = (id: string, currentText: string) => {
+    setEditingWorkId(id);
+    setEditingWorkText(currentText);
+    setActiveWorkId(null);
+    setActiveWorkSubtaskId(null);
+  };
+
+  const saveEditingWork = async (id: string) => {
+    if (!editingWorkText.trim()) return;
+    setLoading(true);
+    setError(null);
+    const { data, error: updateError } = await supabase
+      .from("work_priorities")
+      .update({ title: editingWorkText.trim() })
+      .eq("id", id)
+      .select();
+    if (updateError) {
+      setError(updateError.message || "Failed to update work priority.");
+    } else if (data && data.length > 0) {
+      setWorkPriorities((prev) => prev.map((wp) => (wp.id === id ? data[0] : wp)));
+      setEditingWorkId(null);
+      setEditingWorkText("");
+    }
+    setLoading(false);
+  };
+
+  const startEditingWorkSubtask = (id: string, currentText: string) => {
+    setEditingWorkSubtaskId(id);
+    setEditingWorkSubtaskText(currentText);
+    setActiveWorkId(null);
+    setActiveWorkSubtaskId(null);
+  };
+
+  const saveEditingWorkSubtask = async (id: string) => {
+    if (!editingWorkSubtaskText.trim()) return;
+    setLoading(true);
+    setError(null);
+    const { data, error: updateError } = await supabase
+      .from("work_priorities")
+      .update({ title: editingWorkSubtaskText.trim() })
+      .eq("id", id)
+      .select();
+    if (updateError) {
+      setError(updateError.message || "Failed to update work subtask.");
+    } else if (data && data.length > 0) {
+      setWorkPriorities((prev) => prev.map((wp) => (wp.id === id ? data[0] : wp)));
+      setEditingWorkSubtaskId(null);
+      setEditingWorkSubtaskText("");
+    }
+    setLoading(false);
+  };
+
+  // Self-Dev Edit Functions
+  const startEditingSelfDev = (id: string, currentText: string) => {
+    setEditingSelfDevId(id);
+    setEditingSelfDevText(currentText);
+    setActiveSelfDevId(null);
+    setActiveSelfDevSubtaskId(null);
+  };
+
+  const saveEditingSelfDev = async (id: string) => {
+    if (!editingSelfDevText.trim()) return;
+    setLoading(true);
+    setError(null);
+    const { data, error: updateError } = await supabase
+      .from("self_development_priorities")
+      .update({ title: editingSelfDevText.trim() })
+      .eq("id", id)
+      .select();
+    if (updateError) {
+      setError(updateError.message || "Failed to update self-dev priority.");
+    } else if (data && data.length > 0) {
+      setSelfDevPriorities((prev) => prev.map((sd) => (sd.id === id ? data[0] : sd)));
+      setEditingSelfDevId(null);
+      setEditingSelfDevText("");
+    }
+    setLoading(false);
+  };
+
+  const startEditingSelfDevSubtask = (id: string, currentText: string) => {
+    setEditingSelfDevSubtaskId(id);
+    setEditingSelfDevSubtaskText(currentText);
+    setActiveSelfDevId(null);
+    setActiveSelfDevSubtaskId(null);
+  };
+
+  const saveEditingSelfDevSubtask = async (id: string) => {
+    if (!editingSelfDevSubtaskText.trim()) return;
+    setLoading(true);
+    setError(null);
+    const { data, error: updateError } = await supabase
+      .from("self_development_priorities")
+      .update({ title: editingSelfDevSubtaskText.trim() })
+      .eq("id", id)
+      .select();
+    if (updateError) {
+      setError(updateError.message || "Failed to update self-dev subtask.");
+    } else if (data && data.length > 0) {
+      setSelfDevPriorities((prev) => prev.map((sd) => (sd.id === id ? data[0] : sd)));
+      setEditingSelfDevSubtaskId(null);
+      setEditingSelfDevSubtaskText("");
+    }
+    setLoading(false);
+  };
+
+  // Delete Functions
+  const confirmDeleteWork = (id: string, name: string) => {
+    setDeleteTarget({ id, type: 'work', name });
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteWorkSubtask = (id: string, name: string) => {
+    setDeleteTarget({ id, type: 'work-subtask', name });
+    setShowDeleteConfirm(true);
+  };
+
+  const deleteWorkPriority = async (id: string, isParent: boolean = false) => {
+    setError(null);
+    setLoading(true);
+    
+    // If it's a parent, delete all subtasks first
+    if (isParent) {
+      const { error: deleteSubtasksError } = await supabase
+        .from("work_priorities")
+        .delete()
+        .eq("parent_id", id);
+      
+      if (deleteSubtasksError) {
+        setError(deleteSubtasksError.message || "Failed to delete work subtasks.");
+        setLoading(false);
+        return;
+      }
+    }
+    
+    const { error: deleteError } = await supabase
+      .from("work_priorities")
+      .delete()
+      .eq("id", id);
+    
+    if (deleteError) {
+      setError(deleteError.message || "Failed to delete work priority.");
+    } else {
+      setWorkPriorities((prev) => prev.filter((wp) => wp.id !== id && wp.parent_id !== id));
+    }
+    setLoading(false);
+    setShowDeleteConfirm(false);
+    setDeleteTarget(null);
+  };
+
+  const confirmDeleteSelfDev = (id: string, name: string) => {
+    setDeleteTarget({ id, type: 'selfdev', name });
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteSelfDevSubtask = (id: string, name: string) => {
+    setDeleteTarget({ id, type: 'selfdev-subtask', name });
+    setShowDeleteConfirm(true);
+  };
+
+  const deleteSelfDevPriority = async (id: string, isParent: boolean = false) => {
+    setError(null);
+    setLoading(true);
+    
+    // If it's a parent, delete all subtasks first
+    if (isParent) {
+      const { error: deleteSubtasksError } = await supabase
+        .from("self_development_priorities")
+        .delete()
+        .eq("parent_id", id);
+      
+      if (deleteSubtasksError) {
+        setError(deleteSubtasksError.message || "Failed to delete self-dev subtasks.");
+        setLoading(false);
+        return;
+      }
+    }
+    
+    const { error: deleteError } = await supabase
+      .from("self_development_priorities")
+      .delete()
+      .eq("id", id);
+    
+    if (deleteError) {
+      setError(deleteError.message || "Failed to delete self-dev priority.");
+    } else {
+      setSelfDevPriorities((prev) => prev.filter((sd) => sd.id !== id && sd.parent_id !== id));
+    }
+    setLoading(false);
+    setShowDeleteConfirm(false);
+    setDeleteTarget(null);
+  };
+
+  // Leisure Edit Functions
+  const startEditingLeisure = (id: string, currentText: string) => {
+    setEditingLeisureId(id);
+    setEditingLeisureText(currentText);
+    setActiveLeisureId(null);
+  };
+
+  const saveEditingLeisure = async (id: string) => {
+    if (!editingLeisureText.trim()) return;
+    setLoading(true);
+    setError(null);
+    const { data, error: updateError } = await supabase
+      .from("leisure_activities")
+      .update({ activity: editingLeisureText.trim() })
+      .eq("id", id)
+      .select();
+    if (updateError) {
+      setError(updateError.message || "Failed to update leisure activity.");
+    } else if (data && data.length > 0) {
+      setLeisureActivities((prev) => prev.map((la) => (la.id === id ? data[0] : la)));
+      setEditingLeisureId(null);
+      setEditingLeisureText("");
+    }
+    setLoading(false);
+  };
+
+  const confirmDeleteLeisure = (id: string, name: string) => {
+    setDeleteTarget({ id, type: 'leisure', name });
+    setShowDeleteConfirm(true);
+  };
+
+  const deleteLeisureActivity = async (id: string) => {
+    setError(null);
+    setLoading(true);
+    
+    const { error: deleteError } = await supabase
+      .from("leisure_activities")
+      .delete()
+      .eq("id", id);
+    
+    if (deleteError) {
+      setError(deleteError.message || "Failed to delete leisure activity.");
+    } else {
+      setLeisureActivities((prev) => prev.filter((la) => la.id !== id));
+    }
+    setLoading(false);
+    setShowDeleteConfirm(false);
+    setDeleteTarget(null);
+  };
+
+  // Fitness Edit Functions
+  const startEditingFitness = (id: string, currentText: string) => {
+    setEditingFitnessId(id);
+    setEditingFitnessText(currentText);
+    setActiveFitnessId(null);
+  };
+
+  const saveEditingFitness = async (id: string) => {
+    if (!editingFitnessText.trim()) return;
+    setLoading(true);
+    setError(null);
+    const { data, error: updateError } = await supabase
+      .from("fitness_activities")
+      .update({ activity: editingFitnessText.trim() })
+      .eq("id", id)
+      .select();
+    if (updateError) {
+      setError(updateError.message || "Failed to update fitness activity.");
+    } else if (data && data.length > 0) {
+      setFitnessActivities((prev) => prev.map((fa) => (fa.id === id ? data[0] : fa)));
+      setEditingFitnessId(null);
+      setEditingFitnessText("");
+    }
+    setLoading(false);
+  };
+
+  const confirmDeleteFitness = (id: string, name: string) => {
+    setDeleteTarget({ id, type: 'fitness', name });
+    setShowDeleteConfirm(true);
+  };
+
+  const deleteFitnessActivity = async (id: string) => {
+    setError(null);
+    setLoading(true);
+    
+    const { error: deleteError } = await supabase
+      .from("fitness_activities")
+      .delete()
+      .eq("id", id);
+    
+    if (deleteError) {
+      setError(deleteError.message || "Failed to delete fitness activity.");
+    } else {
+      setFitnessActivities((prev) => prev.filter((fa) => fa.id !== id));
+    }
+    setLoading(false);
+    setShowDeleteConfirm(false);
+    setDeleteTarget(null);
+  };
+
+  // Add subtask functions
+  const addSubtaskToTodo = async (parentId: string) => {
+    setError(null);
+    if (!userId) {
+      setError("You must be logged in to add subtasks.");
+      return;
+    }
+    const subtaskText = subtaskInputs[parentId]?.trim();
+    if (subtaskText) {
+      setLoading(true);
+      const { data, error: insertError } = await supabase
+        .from("todos")
+        .insert([
+          {
+            user_id: userId,
+            task: subtaskText,
+            due_date: null,
+            completed: false,
+            parent_id: parentId,
+          },
+        ])
+        .select();
+      if (insertError) {
+        setError(insertError.message || "Failed to add subtask. Please try again.");
+      } else if (data && data.length > 0) {
+        setTodos((prev) => [...prev, data[0]]);
+        setSubtaskInputs((prev) => ({ ...prev, [parentId]: "" }));
+        setAddingSubtaskTo(null);
+        // Auto-expand to show the new subtask
+        setExpandedTodos((prev) => new Set([...prev, parentId]));
+      }
+      setLoading(false);
+    }
+  };
+
+  const addSubtaskToWork = async (parentId: string) => {
+    setError(null);
+    if (!userId) {
+      setError("You must be logged in to add subtasks.");
+      return;
+    }
+    const subtaskText = subtaskInputs[parentId]?.trim();
+    if (subtaskText) {
+      setLoading(true);
+      const { data, error: insertError } = await supabase
+        .from("work_priorities")
+        .insert([
+          {
+            user_id: userId,
+            title: subtaskText,
+            due_date_only: null,
+            due_datetime: null,
+            parent_id: parentId,
+          },
+        ])
+        .select();
+      if (insertError) {
+        setError(insertError.message || "Failed to add subtask. Please try again.");
+      } else if (data && data.length > 0) {
+        setWorkPriorities((prev) => [...prev, data[0]]);
+        setSubtaskInputs((prev) => ({ ...prev, [parentId]: "" }));
+        setAddingSubtaskTo(null);
+        // Auto-expand to show the new subtask
+        setExpandedTodos((prev) => new Set([...prev, parentId]));
+      }
+      setLoading(false);
+    }
+  };
+
+  const addSubtaskToSelfDev = async (parentId: string) => {
+    setError(null);
+    if (!userId) {
+      setError("You must be logged in to add subtasks.");
+      return;
+    }
+    const subtaskText = subtaskInputs[parentId]?.trim();
+    if (subtaskText) {
+      setLoading(true);
+      const { data, error: insertError } = await supabase
+        .from("self_development_priorities")
+        .insert([
+          {
+            user_id: userId,
+            title: subtaskText,
+            due_date_only: null,
+            due_datetime: null,
+            parent_id: parentId,
+          },
+        ])
+        .select();
+      if (insertError) {
+        setError(insertError.message || "Failed to add subtask. Please try again.");
+      } else if (data && data.length > 0) {
+        setSelfDevPriorities((prev) => [...prev, data[0]]);
+        setSubtaskInputs((prev) => ({ ...prev, [parentId]: "" }));
+        setAddingSubtaskTo(null);
+        // Auto-expand to show the new subtask
+        setExpandedTodos((prev) => new Set([...prev, parentId]));
+      }
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="container mx-auto p-4 pb-24">
       {/* Display the user's name at the top */}
@@ -784,6 +1222,7 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                           id={`task-${task.id}`}
                           checked={task.completed}
                           onCheckedChange={() => toggleTask(currentDay, task.id)}
+                          className="opacity-25"
                           onClick={(e) => e.stopPropagation()}
                         />
                       <div className="flex items-center space-x-2 flex-grow">
@@ -873,6 +1312,7 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                               id={`subtask-${subtask.id}`}
                               checked={subtask.completed}
                               onCheckedChange={() => toggleTask(currentDay, subtask.id)}
+                              className="border-gray-400 opacity-25"
                               onClick={(e) => e.stopPropagation()}
                             />
                             <div className="flex items-center space-x-2 flex-grow">
@@ -939,6 +1379,46 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                         ))}
                       </div>
                     )}
+                    
+                    {/* Add Subtask */}
+                    <div className="ml-12 mt-2">
+                      {addingSubtaskTo === task.id ? (
+                        <Input
+                          type="text"
+                          autoFocus
+                          value={subtaskInputs[task.id] || ""}
+                          onChange={(e) => setSubtaskInputs((prev) => ({ ...prev, [task.id]: e.target.value }))}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && subtaskInputs[task.id]?.trim()) {
+                              addSubtaskToTodo(task.id);
+                            }
+                            if (e.key === "Escape") {
+                              setAddingSubtaskTo(null);
+                              setSubtaskInputs((prev) => ({ ...prev, [task.id]: "" }));
+                            }
+                          }}
+                          onBlur={() => {
+                            if (subtaskInputs[task.id]?.trim()) {
+                              addSubtaskToTodo(task.id);
+                            } else {
+                              setAddingSubtaskTo(null);
+                              setSubtaskInputs((prev) => ({ ...prev, [task.id]: "" }));
+                            }
+                          }}
+                          placeholder="Add subtask..."
+                          className="w-48 bg-[#1A1A1B] border-gray-700 text-white text-sm"
+                        />
+                      ) : (
+                        <Button 
+                          size="sm" 
+                          onClick={() => setAddingSubtaskTo(task.id)}
+                          variant="ghost"
+                          className="h-8 w-8 p-0 text-gray-400 hover:text-white opacity-25"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -955,7 +1435,7 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                           <Checkbox
                             checked={apt.completed}
                             onCheckedChange={() => handleToggleAppointment(apt.id, apt.completed)}
-                            className="border-gray-400"
+                            className="border-gray-400 opacity-25"
                           />
                           <span className={apt.completed ? "line-through text-gray-500" : ""}>
                             {apt.title} at {apt.time}
@@ -970,20 +1450,82 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
               ) && (
                 <div className="mt-4">
                   <h3 className="text-yellow-400 font-semibold mb-2">Leisure Activities:</h3>
-                  <ul className="list-disc list-inside">
+                  <div className="space-y-2">
                     {leisureActivities
                       .filter((activity) => activity.activity_date === focusedDate)
                       .map((activity) => (
-                        <li key={activity.id} className="text-white flex items-center space-x-2">
+                        <div 
+                          key={activity.id} 
+                          className="flex items-center space-x-2 p-2 rounded-lg hover:bg-[#1a1a1b] transition-colors cursor-pointer"
+                          onClick={() => setActiveLeisureId(activeLeisureId === activity.id ? null : activity.id)}
+                        >
                           <Checkbox
                             checked={activity.completed}
                             onCheckedChange={() => handleToggleLeisure(activity.id, activity.completed)}
-                            className="border-gray-400"
+                            className="border-gray-400 opacity-25"
+                            onClick={(e) => e.stopPropagation()}
                           />
-                          <span className={activity.completed ? "line-through text-gray-500" : ""}>{activity.activity}</span>
-                        </li>
+                          <div className="flex items-center space-x-2 flex-grow">
+                            {editingLeisureId === activity.id ? (
+                              <input
+                                type="text"
+                                value={editingLeisureText}
+                                autoFocus
+                                onChange={e => setEditingLeisureText(e.target.value)}
+                                onBlur={() => saveEditingLeisure(activity.id)}
+                                onKeyDown={e => {
+                                  if (e.key === "Enter") {
+                                    saveEditingLeisure(activity.id)
+                                  }
+                                  if (e.key === "Escape") {
+                                    setEditingLeisureId(null)
+                                    setEditingLeisureText("")
+                                  }
+                                }}
+                                className="flex-grow p-1 rounded bg-[#18181A] border border-gray-700 text-white outline-none"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            ) : (
+                              <span 
+                                className={activity.completed ? "line-through text-gray-500" : "text-white"}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startEditingLeisure(activity.id, activity.activity);
+                                }}
+                                title="Click to edit"
+                              >
+                                {activity.activity}
+                              </span>
+                            )}
+                          </div>
+                          
+                          {activeLeisureId === activity.id && (
+                            <div className="flex items-center space-x-1 animate-in slide-in-from-right-2 duration-200">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startEditingLeisure(activity.id, activity.activity);
+                                }}
+                                className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
+                                title="Edit leisure activity"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  confirmDeleteLeisure(activity.id, activity.activity);
+                                }}
+                                className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                                title="Delete leisure activity"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       ))}
-                  </ul>
+                  </div>
                 </div>
               )}
               {fitnessActivities.some(
@@ -991,20 +1533,82 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
               ) && (
                 <div className="mt-4">
                   <h3 className="text-green-400 font-semibold mb-2">Fitness Activities:</h3>
-                  <ul className="list-disc list-inside">
+                  <div className="space-y-2">
                     {fitnessActivities
                       .filter((activity) => activity.activity_date === focusedDate)
                       .map((activity) => (
-                        <li key={activity.id} className="text-white flex items-center space-x-2">
+                        <div 
+                          key={activity.id} 
+                          className="flex items-center space-x-2 p-2 rounded-lg hover:bg-[#1a1a1b] transition-colors cursor-pointer"
+                          onClick={() => setActiveFitnessId(activeFitnessId === activity.id ? null : activity.id)}
+                        >
                           <Checkbox
                             checked={activity.completed}
                             onCheckedChange={() => handleToggleFitness(activity.id, activity.completed)}
-                            className="border-gray-400"
+                            className="border-gray-400 opacity-25"
+                            onClick={(e) => e.stopPropagation()}
                           />
-                          <span className={activity.completed ? "line-through text-gray-500" : ""}>{activity.activity}</span>
-                        </li>
+                          <div className="flex items-center space-x-2 flex-grow">
+                            {editingFitnessId === activity.id ? (
+                              <input
+                                type="text"
+                                value={editingFitnessText}
+                                autoFocus
+                                onChange={e => setEditingFitnessText(e.target.value)}
+                                onBlur={() => saveEditingFitness(activity.id)}
+                                onKeyDown={e => {
+                                  if (e.key === "Enter") {
+                                    saveEditingFitness(activity.id)
+                                  }
+                                  if (e.key === "Escape") {
+                                    setEditingFitnessId(null)
+                                    setEditingFitnessText("")
+                                  }
+                                }}
+                                className="flex-grow p-1 rounded bg-[#18181A] border border-gray-700 text-white outline-none"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            ) : (
+                              <span 
+                                className={activity.completed ? "line-through text-gray-500" : "text-white"}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startEditingFitness(activity.id, activity.activity);
+                                }}
+                                title="Click to edit"
+                              >
+                                {activity.activity}
+                              </span>
+                            )}
+                          </div>
+                          
+                          {activeFitnessId === activity.id && (
+                            <div className="flex items-center space-x-1 animate-in slide-in-from-right-2 duration-200">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startEditingFitness(activity.id, activity.activity);
+                                }}
+                                className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
+                                title="Edit fitness activity"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  confirmDeleteFitness(activity.id, activity.activity);
+                                }}
+                                className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                                title="Delete fitness activity"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       ))}
-                  </ul>
+                  </div>
                 </div>
               )}
               {workPrioritiesForDay.length > 0 && (
@@ -1012,18 +1616,219 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                   <h3 className="text-blue-400 font-semibold mb-2 flex items-center">
                     <Briefcase className="w-5 h-5 mr-2" /> Work Priorities:
                   </h3>
-                  <ul className="list-disc list-inside">
-                    {workPrioritiesForDay.map((wp) => (
-                      <li key={wp.id} className="text-white flex items-center space-x-2">
-                        <Checkbox
-                          checked={wp.completed}
-                          onCheckedChange={() => handleToggleWorkPriority(wp.id, wp.completed)}
-                          className="border-gray-400"
-                        />
-                        <span className={wp.completed ? "line-through text-gray-500" : ""}>{wp.title}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="space-y-2">
+                    {workPrioritiesForDay.map((wp) => {
+                      const workSubtasks = getWorkSubtasks(wp.id);
+                      const hasWorkSubtasks = workSubtasks.length > 0;
+                      const isExpanded = expandedTodos.has(wp.id);
+                      
+                      return (
+                        <div key={wp.id} className="space-y-1">
+                          <div 
+                            className="flex items-center space-x-2 p-2 rounded-lg hover:bg-[#1a1a1b] transition-colors cursor-pointer"
+                            onClick={() => setActiveWorkId(activeWorkId === wp.id ? null : wp.id)}
+                          >
+                         <Checkbox
+                           checked={wp.completed}
+                           onCheckedChange={() => handleToggleWorkPriority(wp.id, wp.completed)}
+                           className="border-gray-400 opacity-25"
+                               onClick={(e) => e.stopPropagation()}
+                             />
+                            <div className="flex items-center space-x-2 flex-grow">
+                              {editingWorkId === wp.id ? (
+                                <input
+                                  type="text"
+                                  value={editingWorkText}
+                                  autoFocus
+                                  onChange={e => setEditingWorkText(e.target.value)}
+                                  onBlur={() => saveEditingWork(wp.id)}
+                                  onKeyDown={e => {
+                                    if (e.key === "Enter") {
+                                      saveEditingWork(wp.id)
+                                    }
+                                    if (e.key === "Escape") {
+                                      setEditingWorkId(null)
+                                      setEditingWorkText("")
+                                    }
+                                  }}
+                                  className="flex-grow p-1 rounded bg-[#18181A] border border-gray-700 text-white outline-none"
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              ) : (
+                                <span 
+                                  className={wp.completed ? "line-through text-gray-500" : "text-white"}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    startEditingWork(wp.id, wp.title);
+                                  }}
+                                  title="Click to edit"
+                                >
+                                  {wp.title}
+                                </span>
+                              )}
+                              {hasWorkSubtasks && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleExpanded(wp.id);
+                                  }}
+                                  className="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded transition-colors"
+                                  title={isExpanded ? "Hide subtasks" : "Show subtasks"}
+                                >
+                                  {workSubtasks.length} subtask{workSubtasks.length !== 1 ? 's' : ''}
+                                </button>
+                              )}
+                            </div>
+                            
+                            {/* Action buttons - only show when active */}
+                            {activeWorkId === wp.id && (
+                              <div className="flex items-center space-x-1 animate-in slide-in-from-right-2 duration-200">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    startEditingWork(wp.id, wp.title);
+                                  }}
+                                  className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
+                                  title="Edit work priority"
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    confirmDeleteWork(wp.id, wp.title);
+                                  }}
+                                  className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                                  title="Delete work priority"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Work Priority Subtasks */}
+                          {isExpanded && hasWorkSubtasks && (
+                            <div className="ml-6 space-y-1">
+                              {workSubtasks.map((subtask) => (
+                                <div 
+                                  key={subtask.id} 
+                                  className="flex items-center space-x-2 p-1 rounded-lg hover:bg-[#1a1a1b] transition-colors cursor-pointer ml-6"
+                                  onClick={() => setActiveWorkSubtaskId(activeWorkSubtaskId === subtask.id ? null : subtask.id)}
+                                >
+                                  <Checkbox
+                                    checked={subtask.completed}
+                                    onCheckedChange={() => handleToggleWorkPriority(subtask.id, subtask.completed)}
+                                    className="border-gray-400 opacity-25"
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                  <div className="flex items-center space-x-2 flex-grow">
+                                    {editingWorkSubtaskId === subtask.id ? (
+                                      <input
+                                        type="text"
+                                        value={editingWorkSubtaskText}
+                                        autoFocus
+                                        onChange={e => setEditingWorkSubtaskText(e.target.value)}
+                                        onBlur={() => saveEditingWorkSubtask(subtask.id)}
+                                        onKeyDown={e => {
+                                          if (e.key === "Enter") {
+                                            saveEditingWorkSubtask(subtask.id)
+                                          }
+                                          if (e.key === "Escape") {
+                                            setEditingWorkSubtaskId(null)
+                                            setEditingWorkSubtaskText("")
+                                          }
+                                        }}
+                                        className="flex-grow p-1 rounded bg-[#18181A] border border-gray-700 text-white outline-none text-sm"
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                    ) : (
+                                      <span 
+                                        className={`text-sm ${subtask.completed ? "line-through text-gray-500" : "text-gray-300"}`}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          startEditingWorkSubtask(subtask.id, subtask.title);
+                                        }}
+                                        title="Click to edit"
+                                      >
+                                        {subtask.title}
+                                      </span>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Subtask action buttons - only show when active */}
+                                  {activeWorkSubtaskId === subtask.id && (
+                                    <div className="flex items-center space-x-1 animate-in slide-in-from-right-2 duration-200">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          startEditingWorkSubtask(subtask.id, subtask.title);
+                                        }}
+                                        className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
+                                        title="Edit subtask"
+                                      >
+                                        <Edit2 className="h-3 w-3" />
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          confirmDeleteWorkSubtask(subtask.id, subtask.title);
+                                        }}
+                                        className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                                        title="Delete subtask"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          
+                          {/* Add Subtask for Work */}
+                          <div className="ml-12 mt-2">
+                            {addingSubtaskTo === wp.id ? (
+                              <Input
+                                type="text"
+                                autoFocus
+                                value={subtaskInputs[wp.id] || ""}
+                                onChange={(e) => setSubtaskInputs((prev) => ({ ...prev, [wp.id]: e.target.value }))}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" && subtaskInputs[wp.id]?.trim()) {
+                                    addSubtaskToWork(wp.id);
+                                  }
+                                  if (e.key === "Escape") {
+                                    setAddingSubtaskTo(null);
+                                    setSubtaskInputs((prev) => ({ ...prev, [wp.id]: "" }));
+                                  }
+                                }}
+                                onBlur={() => {
+                                  if (subtaskInputs[wp.id]?.trim()) {
+                                    addSubtaskToWork(wp.id);
+                                  } else {
+                                    setAddingSubtaskTo(null);
+                                    setSubtaskInputs((prev) => ({ ...prev, [wp.id]: "" }));
+                                  }
+                                }}
+                                placeholder="Add subtask..."
+                                className="w-48 bg-[#1A1A1B] border-gray-700 text-white text-sm"
+                              />
+                            ) : (
+                              <Button 
+                                size="sm" 
+                                onClick={() => setAddingSubtaskTo(wp.id)}
+                                variant="ghost"
+                                className="h-8 w-8 p-0 text-gray-400 hover:text-white opacity-25"
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
               {selfDevPrioritiesForDay.length > 0 && (
@@ -1031,18 +1836,219 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                   <h3 className="text-yellow-400 font-semibold mb-2 flex items-center">
                     <Trophy className="w-5 h-5 mr-2" /> Self-Development Priorities:
                   </h3>
-                  <ul className="list-disc list-inside">
-                    {selfDevPrioritiesForDay.map((sd) => (
-                      <li key={sd.id} className="text-white flex items-center space-x-2">
-                        <Checkbox
-                          checked={sd.completed}
-                          onCheckedChange={() => handleToggleSelfDevPriority(sd.id, sd.completed)}
-                          className="border-gray-400"
-                        />
-                        <span className={sd.completed ? "line-through text-gray-500" : ""}>{sd.title}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="space-y-2">
+                    {selfDevPrioritiesForDay.map((sd) => {
+                      const selfDevSubtasks = getSelfDevSubtasks(sd.id);
+                      const hasSelfDevSubtasks = selfDevSubtasks.length > 0;
+                      const isExpanded = expandedTodos.has(sd.id);
+                      
+                      return (
+                        <div key={sd.id} className="space-y-1">
+                          <div 
+                            className="flex items-center space-x-2 p-2 rounded-lg hover:bg-[#1a1a1b] transition-colors cursor-pointer"
+                            onClick={() => setActiveSelfDevId(activeSelfDevId === sd.id ? null : sd.id)}
+                          >
+                         <Checkbox
+                           checked={sd.completed}
+                           onCheckedChange={() => handleToggleSelfDevPriority(sd.id, sd.completed)}
+                           className="border-gray-400 opacity-25"
+                               onClick={(e) => e.stopPropagation()}
+                             />
+                            <div className="flex items-center space-x-2 flex-grow">
+                              {editingSelfDevId === sd.id ? (
+                                <input
+                                  type="text"
+                                  value={editingSelfDevText}
+                                  autoFocus
+                                  onChange={e => setEditingSelfDevText(e.target.value)}
+                                  onBlur={() => saveEditingSelfDev(sd.id)}
+                                  onKeyDown={e => {
+                                    if (e.key === "Enter") {
+                                      saveEditingSelfDev(sd.id)
+                                    }
+                                    if (e.key === "Escape") {
+                                      setEditingSelfDevId(null)
+                                      setEditingSelfDevText("")
+                                    }
+                                  }}
+                                  className="flex-grow p-1 rounded bg-[#18181A] border border-gray-700 text-white outline-none"
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              ) : (
+                                <span 
+                                  className={sd.completed ? "line-through text-gray-500" : "text-white"}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    startEditingSelfDev(sd.id, sd.title);
+                                  }}
+                                  title="Click to edit"
+                                >
+                                  {sd.title}
+                                </span>
+                              )}
+                              {hasSelfDevSubtasks && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleExpanded(sd.id);
+                                  }}
+                                  className="px-2 py-1 bg-yellow-600 hover:bg-yellow-500 text-white text-xs rounded transition-colors"
+                                  title={isExpanded ? "Hide subtasks" : "Show subtasks"}
+                                >
+                                  {selfDevSubtasks.length} subtask{selfDevSubtasks.length !== 1 ? 's' : ''}
+                                </button>
+                              )}
+                            </div>
+                            
+                            {/* Action buttons - only show when active */}
+                            {activeSelfDevId === sd.id && (
+                              <div className="flex items-center space-x-1 animate-in slide-in-from-right-2 duration-200">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    startEditingSelfDev(sd.id, sd.title);
+                                  }}
+                                  className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
+                                  title="Edit self-dev priority"
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    confirmDeleteSelfDev(sd.id, sd.title);
+                                  }}
+                                  className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                                  title="Delete self-dev priority"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Self-Dev Subtasks */}
+                          {isExpanded && hasSelfDevSubtasks && (
+                            <div className="ml-6 space-y-1">
+                              {selfDevSubtasks.map((subtask) => (
+                                <div 
+                                  key={subtask.id} 
+                                  className="flex items-center space-x-2 p-1 rounded-lg hover:bg-[#1a1a1b] transition-colors cursor-pointer ml-6"
+                                  onClick={() => setActiveSelfDevSubtaskId(activeSelfDevSubtaskId === subtask.id ? null : subtask.id)}
+                                >
+                                  <Checkbox
+                                    checked={subtask.completed}
+                                    onCheckedChange={() => handleToggleSelfDevPriority(subtask.id, subtask.completed)}
+                                    className="border-gray-400 opacity-25"
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                  <div className="flex items-center space-x-2 flex-grow">
+                                    {editingSelfDevSubtaskId === subtask.id ? (
+                                      <input
+                                        type="text"
+                                        value={editingSelfDevSubtaskText}
+                                        autoFocus
+                                        onChange={e => setEditingSelfDevSubtaskText(e.target.value)}
+                                        onBlur={() => saveEditingSelfDevSubtask(subtask.id)}
+                                        onKeyDown={e => {
+                                          if (e.key === "Enter") {
+                                            saveEditingSelfDevSubtask(subtask.id)
+                                          }
+                                          if (e.key === "Escape") {
+                                            setEditingSelfDevSubtaskId(null)
+                                            setEditingSelfDevSubtaskText("")
+                                          }
+                                        }}
+                                        className="flex-grow p-1 rounded bg-[#18181A] border border-gray-700 text-white outline-none text-sm"
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                    ) : (
+                                      <span 
+                                        className={`text-sm ${subtask.completed ? "line-through text-gray-500" : "text-gray-300"}`}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          startEditingSelfDevSubtask(subtask.id, subtask.title);
+                                        }}
+                                        title="Click to edit"
+                                      >
+                                        {subtask.title}
+                                      </span>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Subtask action buttons - only show when active */}
+                                  {activeSelfDevSubtaskId === subtask.id && (
+                                    <div className="flex items-center space-x-1 animate-in slide-in-from-right-2 duration-200">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          startEditingSelfDevSubtask(subtask.id, subtask.title);
+                                        }}
+                                        className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
+                                        title="Edit subtask"
+                                      >
+                                        <Edit2 className="h-3 w-3" />
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          confirmDeleteSelfDevSubtask(subtask.id, subtask.title);
+                                        }}
+                                        className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                                        title="Delete subtask"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          
+                          {/* Add Subtask for Self-Dev */}
+                          <div className="ml-12 mt-2">
+                            {addingSubtaskTo === sd.id ? (
+                              <Input
+                                type="text"
+                                autoFocus
+                                value={subtaskInputs[sd.id] || ""}
+                                onChange={(e) => setSubtaskInputs((prev) => ({ ...prev, [sd.id]: e.target.value }))}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" && subtaskInputs[sd.id]?.trim()) {
+                                    addSubtaskToSelfDev(sd.id);
+                                  }
+                                  if (e.key === "Escape") {
+                                    setAddingSubtaskTo(null);
+                                    setSubtaskInputs((prev) => ({ ...prev, [sd.id]: "" }));
+                                  }
+                                }}
+                                onBlur={() => {
+                                  if (subtaskInputs[sd.id]?.trim()) {
+                                    addSubtaskToSelfDev(sd.id);
+                                  } else {
+                                    setAddingSubtaskTo(null);
+                                    setSubtaskInputs((prev) => ({ ...prev, [sd.id]: "" }));
+                                  }
+                                }}
+                                placeholder="Add subtask..."
+                                className="w-48 bg-[#1A1A1B] border-gray-700 text-white text-sm"
+                              />
+                            ) : (
+                              <Button 
+                                size="sm" 
+                                onClick={() => setAddingSubtaskTo(sd.id)}
+                                variant="ghost"
+                                className="h-8 w-8 p-0 text-gray-400 hover:text-white opacity-25"
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
               {!addingTask && (
@@ -1060,12 +2066,12 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
             const dayLabel = format(dateObj, "EEEE");
             const dateStr = format(dateObj, "yyyy-MM-dd");
               const numTasksForDay =
-                todos.filter((todo) => todo.due_date === dateStr).length +
-                workPriorities.filter((wp) => wp.due_date_only && wp.due_date_only === dateStr).length +
+                todos.filter((todo) => todo.due_date === dateStr && !todo.parent_id).length +
+                workPriorities.filter((wp) => !wp.parent_id && wp.due_date_only && wp.due_date_only === dateStr).length +
                 appointments.filter((apt) => apt.date === dateStr).length +
                 fitnessActivities.filter((fa) => fa.activity_date === dateStr).length +
                 leisureActivities.filter((la) => la.activity_date === dateStr).length;
-             const selfDevForDay = selfDevPriorities.filter((sd) => sd.due_date_only && sd.due_date_only === dateStr);
+             const selfDevForDay = selfDevPriorities.filter((sd) => !sd.parent_id && sd.due_date_only && sd.due_date_only === dateStr);
               return (
                 <Card
                 key={dateStr}
@@ -1085,6 +2091,9 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                           {fitnessActivities.some(
                           (activity) => activity.activity_date === dateStr,
                           ) && <Dumbbell className="h-4 w-4 text-green-400 mr-2" />}
+                          {workPriorities.some(
+                          (wp) => !wp.parent_id && ((wp.due_date_only && wp.due_date_only === dateStr) || (wp.due_datetime && wp.due_datetime.startsWith(dateStr))),
+                          ) && <Briefcase className="h-4 w-4 text-blue-400 mr-2" />}
                          {selfDevForDay.length > 0 && <Trophy className="h-4 w-4 text-yellow-400 mr-2" />}
                         {dayLabel.toUpperCase()}
                         </div>
@@ -1158,7 +2167,7 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
               <span className="font-semibold text-white">
                 "{deleteTarget.name}"
               </span>
-              {deleteTarget.type === 'task' ? ' and all its subtasks' : ''}?
+              {(deleteTarget.type === 'task' || deleteTarget.type === 'work' || deleteTarget.type === 'selfdev') ? ' and all its subtasks' : ''}?
             </p>
             
             <div className="flex space-x-3">
@@ -1175,8 +2184,20 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                 onClick={() => {
                   if (deleteTarget.type === 'task') {
                     deleteTodo(deleteTarget.id);
-                  } else {
+                  } else if (deleteTarget.type === 'subtask') {
                     deleteSubtask(deleteTarget.id);
+                  } else if (deleteTarget.type === 'work') {
+                    deleteWorkPriority(deleteTarget.id, true);
+                  } else if (deleteTarget.type === 'work-subtask') {
+                    deleteWorkPriority(deleteTarget.id, false);
+                  } else if (deleteTarget.type === 'selfdev') {
+                    deleteSelfDevPriority(deleteTarget.id, true);
+                  } else if (deleteTarget.type === 'selfdev-subtask') {
+                    deleteSelfDevPriority(deleteTarget.id, false);
+                  } else if (deleteTarget.type === 'leisure') {
+                    deleteLeisureActivity(deleteTarget.id);
+                  } else if (deleteTarget.type === 'fitness') {
+                    deleteFitnessActivity(deleteTarget.id);
                   }
                 }}
                 className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-md transition-colors"
