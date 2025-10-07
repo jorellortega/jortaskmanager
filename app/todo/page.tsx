@@ -57,7 +57,7 @@ export default function TodoPage() {
         .from("todos")
         .select("*")
         .eq("user_id", user.id)
-        .order("due_date", { ascending: true })
+        .order("created_at", { ascending: false })
       if (fetchError) {
         setError("Failed to fetch todos.")
       } else {
@@ -129,7 +129,7 @@ export default function TodoPage() {
           }
         }
       }
-      setTodos((prev) => [...prev, ...newTodos])
+      setTodos((prev) => [...newTodos, ...prev])
       setNewTodo("")
       setNewDueDate(format(new Date(), "yyyy-MM-dd"))
       setIsDateEnabled(false)
@@ -250,15 +250,21 @@ export default function TodoPage() {
       if (insertError) {
         setError(insertError.message || "Failed to add subtask. Please try again.")
       } else if (data && data.length > 0) {
-        setTodos((prev) => [...prev, data[0]])
+        setTodos((prev) => [data[0], ...prev])
         setSubtaskInputs((prev) => ({ ...prev, [parentId]: "" }))
       }
       setLoading(false)
     }
   }
 
-  // Group todos by parent_id
-  const mainTodos = todos.filter((todo) => !todo.parent_id)
+  // Group todos by parent_id and sort by created_at (newest first)
+  const mainTodos = todos
+    .filter((todo) => !todo.parent_id)
+    .sort((a, b) => {
+      const aDate = new Date(a.created_at || 0)
+      const bDate = new Date(b.created_at || 0)
+      return bDate.getTime() - aDate.getTime()
+    })
   const subtasksByParent: { [parentId: string]: Todo[] } = useMemo(() => {
     const map: { [parentId: string]: Todo[] } = {}
     todos.forEach((todo) => {
@@ -450,7 +456,7 @@ export default function TodoPage() {
                     completed: false,
                     parent_id: null,
                   }
-                  setTodos((prevTodos) => [...prevTodos, newTodoItem])
+                  setTodos((prevTodos) => [newTodoItem, ...prevTodos])
                   input.value = ""
                 }
               }}

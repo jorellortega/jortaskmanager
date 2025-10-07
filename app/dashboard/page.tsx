@@ -74,6 +74,8 @@ type FitnessActivity = {
   activity: string
   activity_date: string
   completed: boolean
+  parent_id?: string | null
+  created_at?: string
 }
 
 type WorkPriority = {
@@ -125,7 +127,7 @@ export default function WeeklyTaskManager() {
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null)
   const [editingSubtaskText, setEditingSubtaskText] = useState<string>("")
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; type: 'task' | 'subtask' | 'work' | 'work-subtask' | 'selfdev' | 'selfdev-subtask' | 'leisure' | 'fitness'; name: string } | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; type: 'task' | 'subtask' | 'work' | 'work-subtask' | 'selfdev' | 'selfdev-subtask' | 'leisure' | 'fitness' | 'fitness-subtask'; name: string } | null>(null)
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null)
   const [activeSubtaskId, setActiveSubtaskId] = useState<string | null>(null)
   const [activeWorkId, setActiveWorkId] = useState<string | null>(null)
@@ -146,6 +148,9 @@ export default function WeeklyTaskManager() {
   const [editingLeisureText, setEditingLeisureText] = useState<string>("")
   const [editingFitnessId, setEditingFitnessId] = useState<string | null>(null)
   const [editingFitnessText, setEditingFitnessText] = useState<string>("")
+  const [editingFitnessSubtaskId, setEditingFitnessSubtaskId] = useState<string | null>(null)
+  const [editingFitnessSubtaskText, setEditingFitnessSubtaskText] = useState<string>("")
+  const [activeFitnessSubtaskId, setActiveFitnessSubtaskId] = useState<string | null>(null)
   const [subtaskInputs, setSubtaskInputs] = useState<{ [parentId: string]: string }>({})
   const [addingSubtaskTo, setAddingSubtaskTo] = useState<string | null>(null)
   const router = useRouter();
@@ -456,6 +461,16 @@ export default function WeeklyTaskManager() {
   // Helper to get self-dev subtasks
   const getSelfDevSubtasks = (parentId: string) => {
     return selfDevPriorities.filter(sd => sd.parent_id === parentId);
+  };
+  
+  // Helper to get fitness subtasks
+  const getFitnessSubtasks = (parentId: string) => {
+    return fitnessActivities.filter(fa => fa.parent_id === parentId);
+  };
+  
+  // Helper to check if a fitness activity has subtasks
+  const hasFitnessSubtasks = (fitnessId: string) => {
+    return fitnessActivities.some(fa => fa.parent_id === fitnessId);
   };
 
   const handleSignOut = async () => {
@@ -954,6 +969,57 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
     setDeleteTarget(null);
   };
 
+  // Fitness Subtask Functions
+  const startEditingFitnessSubtask = (id: string, currentText: string) => {
+    setEditingFitnessSubtaskId(id);
+    setEditingFitnessSubtaskText(currentText);
+    setActiveFitnessId(null);
+    setActiveFitnessSubtaskId(null);
+  };
+
+  const saveEditingFitnessSubtask = async (id: string) => {
+    if (!editingFitnessSubtaskText.trim()) return;
+    setLoading(true);
+    setError(null);
+    const { data, error: updateError } = await supabase
+      .from("fitness_activities")
+      .update({ activity: editingFitnessSubtaskText.trim() })
+      .eq("id", id)
+      .select();
+    if (updateError) {
+      setError(updateError.message || "Failed to update fitness subtask.");
+    } else if (data && data.length > 0) {
+      setFitnessActivities((prev) => prev.map((fa) => (fa.id === id ? data[0] : fa)));
+      setEditingFitnessSubtaskId(null);
+      setEditingFitnessSubtaskText("");
+    }
+    setLoading(false);
+  };
+
+  const confirmDeleteFitnessSubtask = (id: string, name: string) => {
+    setDeleteTarget({ id, type: 'fitness-subtask', name });
+    setShowDeleteConfirm(true);
+  };
+
+  const deleteFitnessSubtask = async (id: string) => {
+    setError(null);
+    setLoading(true);
+    
+    const { error: deleteError } = await supabase
+      .from("fitness_activities")
+      .delete()
+      .eq("id", id);
+    
+    if (deleteError) {
+      setError(deleteError.message || "Failed to delete fitness subtask.");
+    } else {
+      setFitnessActivities((prev) => prev.filter((fa) => fa.id !== id));
+    }
+    setLoading(false);
+    setShowDeleteConfirm(false);
+    setDeleteTarget(null);
+  };
+
   // Add subtask functions
   const addSubtaskToTodo = async (parentId: string) => {
     setError(null);
@@ -1048,6 +1114,41 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
         setError(insertError.message || "Failed to add subtask. Please try again.");
       } else if (data && data.length > 0) {
         setSelfDevPriorities((prev) => [...prev, data[0]]);
+        setSubtaskInputs((prev) => ({ ...prev, [parentId]: "" }));
+        setAddingSubtaskTo(null);
+        // Auto-expand to show the new subtask
+        setExpandedTodos((prev) => new Set([...prev, parentId]));
+      }
+      setLoading(false);
+    }
+  };
+
+  const addSubtaskToFitness = async (parentId: string) => {
+    setError(null);
+    if (!userId) {
+      setError("You must be logged in to add subtasks.");
+      return;
+    }
+    const subtaskText = subtaskInputs[parentId]?.trim();
+    if (subtaskText) {
+      setLoading(true);
+      const { data, error: insertError } = await supabase
+        .from("fitness_activities")
+        .insert([
+          {
+            user_id: userId,
+            activity: subtaskText,
+            activity_date: null,
+            activity_time: null,
+            completed: false,
+            parent_id: parentId,
+          },
+        ])
+        .select();
+      if (insertError) {
+        setError(insertError.message || "Failed to add subtask. Please try again.");
+      } else if (data && data.length > 0) {
+        setFitnessActivities((prev) => [...prev, data[0]]);
         setSubtaskInputs((prev) => ({ ...prev, [parentId]: "" }));
         setAddingSubtaskTo(null);
         // Auto-expand to show the new subtask
@@ -1222,7 +1323,7 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                           id={`task-${task.id}`}
                           checked={task.completed}
                           onCheckedChange={() => toggleTask(currentDay, task.id)}
-                          className="opacity-25"
+                          className="border-gray-400 opacity-25"
                           onClick={(e) => e.stopPropagation()}
                         />
                       <div className="flex items-center space-x-2 flex-grow">
@@ -1529,85 +1630,223 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                 </div>
               )}
               {fitnessActivities.some(
-                (activity) => activity.activity_date === focusedDate,
+                (activity) => activity.activity_date === focusedDate && !activity.parent_id,
               ) && (
                 <div className="mt-4">
                   <h3 className="text-green-400 font-semibold mb-2">Fitness Activities:</h3>
                   <div className="space-y-2">
                     {fitnessActivities
-                      .filter((activity) => activity.activity_date === focusedDate)
-                      .map((activity) => (
-                        <div 
-                          key={activity.id} 
-                          className="flex items-center space-x-2 p-2 rounded-lg hover:bg-[#1a1a1b] transition-colors cursor-pointer"
-                          onClick={() => setActiveFitnessId(activeFitnessId === activity.id ? null : activity.id)}
-                        >
-                          <Checkbox
-                            checked={activity.completed}
-                            onCheckedChange={() => handleToggleFitness(activity.id, activity.completed)}
-                            className="border-gray-400 opacity-25"
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                          <div className="flex items-center space-x-2 flex-grow">
-                            {editingFitnessId === activity.id ? (
-                              <input
-                                type="text"
-                                value={editingFitnessText}
-                                autoFocus
-                                onChange={e => setEditingFitnessText(e.target.value)}
-                                onBlur={() => saveEditingFitness(activity.id)}
-                                onKeyDown={e => {
-                                  if (e.key === "Enter") {
-                                    saveEditingFitness(activity.id)
-                                  }
-                                  if (e.key === "Escape") {
-                                    setEditingFitnessId(null)
-                                    setEditingFitnessText("")
-                                  }
-                                }}
-                                className="flex-grow p-1 rounded bg-[#18181A] border border-gray-700 text-white outline-none"
+                      .filter((activity) => activity.activity_date === focusedDate && !activity.parent_id)
+                      .map((activity) => {
+                        const fitnessSubtasks = getFitnessSubtasks(activity.id);
+                        const hasFitnessSubtasksCount = fitnessSubtasks.length > 0;
+                        const isExpanded = expandedTodos.has(activity.id);
+                        
+                        return (
+                          <div key={activity.id} className="space-y-1">
+                            <div 
+                              className="flex items-center space-x-2 p-2 rounded-lg hover:bg-[#1a1a1b] transition-colors cursor-pointer"
+                              onClick={() => setActiveFitnessId(activeFitnessId === activity.id ? null : activity.id)}
+                            >
+                              <Checkbox
+                                checked={activity.completed}
+                                onCheckedChange={() => handleToggleFitness(activity.id, activity.completed)}
+                                className="border-gray-400 opacity-25"
                                 onClick={(e) => e.stopPropagation()}
                               />
-                            ) : (
-                              <span 
-                                className={activity.completed ? "line-through text-gray-500" : "text-white"}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  startEditingFitness(activity.id, activity.activity);
-                                }}
-                                title="Click to edit"
-                              >
-                                {activity.activity}
-                              </span>
-                            )}
-                          </div>
-                          
-                          {activeFitnessId === activity.id && (
-                            <div className="flex items-center space-x-1 animate-in slide-in-from-right-2 duration-200">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  startEditingFitness(activity.id, activity.activity);
-                                }}
-                                className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
-                                title="Edit fitness activity"
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  confirmDeleteFitness(activity.id, activity.activity);
-                                }}
-                                className="p-1 text-red-400 hover:text-red-300 transition-colors"
-                                title="Delete fitness activity"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
+                              <div className="flex items-center space-x-2 flex-grow">
+                                {editingFitnessId === activity.id ? (
+                                  <input
+                                    type="text"
+                                    value={editingFitnessText}
+                                    autoFocus
+                                    onChange={e => setEditingFitnessText(e.target.value)}
+                                    onBlur={() => saveEditingFitness(activity.id)}
+                                    onKeyDown={e => {
+                                      if (e.key === "Enter") {
+                                        saveEditingFitness(activity.id)
+                                      }
+                                      if (e.key === "Escape") {
+                                        setEditingFitnessId(null)
+                                        setEditingFitnessText("")
+                                      }
+                                    }}
+                                    className="flex-grow p-1 rounded bg-[#18181A] border border-gray-700 text-white outline-none"
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                ) : (
+                                  <span 
+                                    className={activity.completed ? "line-through text-gray-500" : "text-white"}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      startEditingFitness(activity.id, activity.activity);
+                                    }}
+                                    title="Click to edit"
+                                  >
+                                    {activity.activity}
+                                  </span>
+                                )}
+                                {hasFitnessSubtasksCount && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleExpanded(activity.id);
+                                    }}
+                                    className="px-2 py-1 bg-green-600 hover:bg-green-500 text-white text-xs rounded transition-colors"
+                                    title={isExpanded ? "Hide subtasks" : "Show subtasks"}
+                                  >
+                                    {fitnessSubtasks.length} subtask{fitnessSubtasks.length !== 1 ? 's' : ''}
+                                  </button>
+                                )}
+                              </div>
+                              
+                              {activeFitnessId === activity.id && (
+                                <div className="flex items-center space-x-1 animate-in slide-in-from-right-2 duration-200">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      startEditingFitness(activity.id, activity.activity);
+                                    }}
+                                    className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
+                                    title="Edit fitness activity"
+                                  >
+                                    <Edit2 className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      confirmDeleteFitness(activity.id, activity.activity);
+                                    }}
+                                    className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                                    title="Delete fitness activity"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      ))}
+                            
+                            {/* Fitness Subtasks */}
+                            {isExpanded && hasFitnessSubtasksCount && (
+                              <div className="ml-6 space-y-1">
+                                {fitnessSubtasks.map((subtask) => (
+                                  <div 
+                                    key={subtask.id} 
+                                    className="flex items-center space-x-2 p-1 rounded-lg hover:bg-[#1a1a1b] transition-colors cursor-pointer ml-6"
+                                    onClick={() => setActiveFitnessSubtaskId(activeFitnessSubtaskId === subtask.id ? null : subtask.id)}
+                                  >
+                                    <Checkbox
+                                      checked={subtask.completed}
+                                      onCheckedChange={() => handleToggleFitness(subtask.id, subtask.completed)}
+                                      className="border-gray-400 opacity-25"
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                    <div className="flex items-center space-x-2 flex-grow">
+                                      {editingFitnessSubtaskId === subtask.id ? (
+                                        <input
+                                          type="text"
+                                          value={editingFitnessSubtaskText}
+                                          autoFocus
+                                          onChange={e => setEditingFitnessSubtaskText(e.target.value)}
+                                          onBlur={() => saveEditingFitnessSubtask(subtask.id)}
+                                          onKeyDown={e => {
+                                            if (e.key === "Enter") {
+                                              saveEditingFitnessSubtask(subtask.id)
+                                            }
+                                            if (e.key === "Escape") {
+                                              setEditingFitnessSubtaskId(null)
+                                              setEditingFitnessSubtaskText("")
+                                            }
+                                          }}
+                                          className="flex-grow p-1 rounded bg-[#18181A] border border-gray-700 text-white outline-none text-sm"
+                                          onClick={(e) => e.stopPropagation()}
+                                        />
+                                      ) : (
+                                        <span 
+                                          className={`text-sm ${subtask.completed ? "line-through text-gray-500" : "text-gray-300"}`}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            startEditingFitnessSubtask(subtask.id, subtask.activity);
+                                          }}
+                                          title="Click to edit"
+                                        >
+                                          {subtask.activity}
+                                        </span>
+                                      )}
+                                    </div>
+                                    
+                                    {/* Subtask action buttons - only show when active */}
+                                    {activeFitnessSubtaskId === subtask.id && (
+                                      <div className="flex items-center space-x-1 animate-in slide-in-from-right-2 duration-200">
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            startEditingFitnessSubtask(subtask.id, subtask.activity);
+                                          }}
+                                          className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
+                                          title="Edit subtask"
+                                        >
+                                          <Edit2 className="h-3 w-3" />
+                                        </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            confirmDeleteFitnessSubtask(subtask.id, subtask.activity);
+                                          }}
+                                          className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                                          title="Delete subtask"
+                                        >
+                                          <Trash2 className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            
+                            {/* Add Subtask for Fitness */}
+                            <div className="ml-12 mt-2">
+                              {addingSubtaskTo === activity.id ? (
+                                <Input
+                                  type="text"
+                                  autoFocus
+                                  value={subtaskInputs[activity.id] || ""}
+                                  onChange={(e) => setSubtaskInputs((prev) => ({ ...prev, [activity.id]: e.target.value }))}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" && subtaskInputs[activity.id]?.trim()) {
+                                      addSubtaskToFitness(activity.id);
+                                    }
+                                    if (e.key === "Escape") {
+                                      setAddingSubtaskTo(null);
+                                      setSubtaskInputs((prev) => ({ ...prev, [activity.id]: "" }));
+                                    }
+                                  }}
+                                  onBlur={() => {
+                                    if (subtaskInputs[activity.id]?.trim()) {
+                                      addSubtaskToFitness(activity.id);
+                                    } else {
+                                      setAddingSubtaskTo(null);
+                                      setSubtaskInputs((prev) => ({ ...prev, [activity.id]: "" }));
+                                    }
+                                  }}
+                                  placeholder="Add subtask..."
+                                  className="w-48 bg-[#1A1A1B] border-gray-700 text-white text-sm"
+                                />
+                              ) : (
+                                <Button 
+                                  size="sm" 
+                                  onClick={() => setAddingSubtaskTo(activity.id)}
+                                  variant="ghost"
+                                  className="h-8 w-8 p-0 text-gray-400 hover:text-white opacity-25"
+                                >
+                                  <Plus className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                   </div>
                 </div>
               )}
@@ -2167,7 +2406,7 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
               <span className="font-semibold text-white">
                 "{deleteTarget.name}"
               </span>
-              {(deleteTarget.type === 'task' || deleteTarget.type === 'work' || deleteTarget.type === 'selfdev') ? ' and all its subtasks' : ''}?
+              {(deleteTarget.type === 'task' || deleteTarget.type === 'work' || deleteTarget.type === 'selfdev' || deleteTarget.type === 'fitness') ? ' and all its subtasks' : ''}?
             </p>
             
             <div className="flex space-x-3">
@@ -2198,6 +2437,8 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                     deleteLeisureActivity(deleteTarget.id);
                   } else if (deleteTarget.type === 'fitness') {
                     deleteFitnessActivity(deleteTarget.id);
+                  } else if (deleteTarget.type === 'fitness-subtask') {
+                    deleteFitnessSubtask(deleteTarget.id);
                   }
                 }}
                 className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-md transition-colors"
