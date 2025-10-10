@@ -32,14 +32,17 @@ export default function JournalPage() {
 
   useEffect(() => {
     const fetchEntries = async () => {
+      console.log("🔄 Fetching journal entries...")
       setLoading(true)
       setError(null)
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       if (userError || !user) {
+        console.error("❌ User not authenticated:", userError)
         setError("You must be logged in to view journal entries.")
         setLoading(false)
         return
       }
+      console.log("✅ User authenticated:", user.id)
       setUserId(user.id)
       const { data, error: fetchError } = await supabase
         .from("journal_entries")
@@ -47,8 +50,10 @@ export default function JournalPage() {
         .eq("user_id", user.id)
         .order("entry_date", { ascending: false })
       if (fetchError) {
+        console.error("❌ Error fetching journal entries:", fetchError)
         setError("Failed to fetch journal entries.")
       } else {
+        console.log("✅ Journal entries loaded:", data?.length || 0, "items")
         setEntries(data || [])
       }
       setLoading(false)
@@ -57,31 +62,70 @@ export default function JournalPage() {
   }, [])
 
   const handleSave = async () => {
-    if (entry.trim() && date && userId) {
-      setLoading(true)
-      setError(null)
-      const entryDate = date.toISOString().slice(0, 10)
-      const { data, error: insertError } = await supabase
-        .from("journal_entries")
-        .insert([
-          {
-            user_id: userId,
-            entry_date: entryDate,
-            content: entry,
-          },
-        ])
-        .select()
-      if (insertError) {
-        setError(insertError.message || "Failed to save entry.")
-      } else if (data && data.length > 0) {
-        setEntries((prev) => [data[0], ...prev])
-        setEntry("")
-      }
-      setLoading(false)
+    console.log("🚀 handleSave called")
+    console.log("📌 userId:", userId)
+    console.log("📝 entry:", entry)
+    console.log("📅 date:", date)
+    
+    if (!userId) {
+      console.error("❌ No userId found - user not authenticated")
+      setError("Error: User not authenticated. Please log in.")
+      return
     }
+    
+    if (!entry.trim()) {
+      console.error("❌ Validation failed: Entry content is empty")
+      setError("Please write something before saving.")
+      return
+    }
+    
+    if (!date) {
+      console.error("❌ Validation failed: No date selected")
+      setError("Please select a date.")
+      return
+    }
+    
+    console.log("✅ Validation passed, inserting journal entry...")
+    
+    setLoading(true)
+    setError(null)
+    const entryDate = date.toISOString().slice(0, 10)
+    
+    const journalData = {
+      user_id: userId,
+      entry_date: entryDate,
+      content: entry,
+    }
+    console.log("📤 Inserting data:", journalData)
+    
+    const { data, error: insertError } = await supabase
+      .from("journal_entries")
+      .insert([journalData])
+      .select()
+      
+    if (insertError) {
+      console.error("❌ Supabase error:", insertError)
+      console.error("Error details:", {
+        message: insertError.message,
+        details: insertError.details,
+        hint: insertError.hint,
+        code: insertError.code
+      })
+      setError(insertError.message || "Failed to save entry.")
+    } else if (data && data.length > 0) {
+      console.log("✅ Journal entry added successfully:", data)
+      setEntries((prev) => [data[0], ...prev])
+      setEntry("")
+      setError(null)
+    } else {
+      console.error("⚠️ No data returned from insert")
+      setError("Entry saved but no data returned.")
+    }
+    setLoading(false)
   }
 
   const handleDelete = async (id: string) => {
+    console.log("🗑️ handleDelete called for id:", id)
     setLoading(true)
     setError(null)
     const { error: deleteError } = await supabase
@@ -89,8 +133,10 @@ export default function JournalPage() {
       .delete()
       .eq("id", id)
     if (deleteError) {
+      console.error("❌ Delete error:", deleteError)
       setError(deleteError.message || "Failed to delete entry.")
     } else {
+      console.log("✅ Entry deleted successfully")
       setEntries((prev) => prev.filter((entry) => entry.id !== id))
     }
     setLoading(false)
@@ -107,18 +153,31 @@ export default function JournalPage() {
     setEditContent("");
   };
   const saveEdit = async (id: string) => {
+    console.log("💾 saveEdit called for id:", id)
+    console.log("📝 editDate:", editDate)
+    console.log("📝 editContent:", editContent)
+    
     setLoading(true);
     setError(null);
+    
+    const updateData = { entry_date: editDate, content: editContent }
+    console.log("📤 Updating with data:", updateData)
+    
     const { data, error: updateError } = await supabase
       .from("journal_entries")
-      .update({ entry_date: editDate, content: editContent })
+      .update(updateData)
       .eq("id", id)
       .select();
+      
     if (updateError) {
+      console.error("❌ Update error:", updateError)
       setError(updateError.message || "Failed to update entry.");
     } else if (data && data.length > 0) {
+      console.log("✅ Entry updated successfully:", data)
       setEntries((prev) => prev.map((e) => (e.id === id ? data[0] : e)));
       cancelEdit();
+    } else {
+      console.error("⚠️ No data returned from update")
     }
     setLoading(false);
   };
@@ -149,7 +208,21 @@ export default function JournalPage() {
                 selected={date}
                 onSelect={setDate}
                 className="rounded-md border border-gray-700 bg-[#141415] text-white"
+                style={{
+                  '--rdp-day_selected-background-color': '#000000',
+                  '--rdp-day_selected-color': '#ffffff',
+                  '--rdp-day_selected-border': '2px solid white'
+                } as React.CSSProperties}
               />
+              {date && (
+                <div className="mt-3 p-3 bg-blue-900/30 border border-blue-700 rounded-md">
+                  <p className="text-sm text-blue-300">
+                    <span className="font-semibold">Selected Date:</span>
+                    <br />
+                    {format(date, "EEEE, MMMM d, yyyy")}
+                  </p>
+                </div>
+              )}
             </div>
             <div className="w-full md:w-2/3">
               <Textarea

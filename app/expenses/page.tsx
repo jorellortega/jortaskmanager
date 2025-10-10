@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
 import { ArrowLeft, Plus, Trash2, Repeat, Edit2, Check, X } from "lucide-react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabaseClient"
@@ -19,8 +18,7 @@ type Expense = {
   description: string
   amount: number
   category: string
-  date: string
-  isRecurring: boolean
+  expense_date: string
   created_at?: string
 }
 
@@ -57,8 +55,7 @@ export default function ExpensesPage() {
     description: "",
     amount: 0,
     category: "",
-    date: new Date().toISOString().split("T")[0],
-    isRecurring: false,
+    expense_date: new Date().toISOString().split("T")[0],
   })
   const [newSubscription, setNewSubscription] = useState<Omit<Subscription, "id" | "user_id" | "created_at" | "updated_at">>({
     name: "",
@@ -77,30 +74,40 @@ export default function ExpensesPage() {
 
   useEffect(() => {
     const getUserAndData = async () => {
+      console.log("🔄 Fetching user and data...")
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       if (userError || !user) {
-        console.error("User not authenticated")
+        console.error("❌ User not authenticated:", userError)
         return
       }
+      console.log("✅ User authenticated:", user.id)
       setUserId(user.id)
       
       // Fetch expenses
+      console.log("📥 Fetching expenses...")
       const { data: expensesData, error: expensesError } = await supabase
         .from("expenses")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
-      if (!expensesError && expensesData) {
+      if (expensesError) {
+        console.error("❌ Error fetching expenses:", expensesError)
+      } else if (expensesData) {
+        console.log("✅ Expenses loaded:", expensesData.length, "items")
         setExpenses(expensesData)
       }
       
       // Fetch subscriptions
+      console.log("📥 Fetching subscriptions...")
       const { data: subscriptionsData, error: subscriptionsError } = await supabase
         .from("subscriptions")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
-      if (!subscriptionsError && subscriptionsData) {
+      if (subscriptionsError) {
+        console.error("❌ Error fetching subscriptions:", subscriptionsError)
+      } else if (subscriptionsData) {
+        console.log("✅ Subscriptions loaded:", subscriptionsData.length, "items")
         setSubscriptions(subscriptionsData)
       }
     }
@@ -109,30 +116,65 @@ export default function ExpensesPage() {
 
   const addExpense = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!userId) return
-    if (newExpense.description && newExpense.amount && newExpense.category) {
-      const { data, error } = await supabase
-        .from("expenses")
-        .insert([{
-          user_id: userId,
-          description: newExpense.description,
-          amount: newExpense.amount,
-          category: newExpense.category,
-          date: newExpense.date,
-          isRecurring: newExpense.isRecurring,
-        }])
-        .select()
-      
-      if (!error && data) {
-        setExpenses([...expenses, data[0]])
-        setNewExpense({
-          description: "",
-          amount: 0,
-          category: "",
-          date: new Date().toISOString().split("T")[0],
-          isRecurring: false,
-        })
-      }
+    console.log("🚀 addExpense called")
+    console.log("📌 userId:", userId)
+    console.log("📝 newExpense:", newExpense)
+    
+    if (!userId) {
+      console.error("❌ No userId found - user not authenticated")
+      alert("Error: User not authenticated. Please log in.")
+      return
+    }
+    
+    if (!newExpense.description || !newExpense.amount || !newExpense.category) {
+      console.error("❌ Validation failed:")
+      console.log("  - Description:", newExpense.description || "MISSING")
+      console.log("  - Amount:", newExpense.amount || "MISSING")
+      console.log("  - Category:", newExpense.category || "MISSING")
+      alert("Please fill in all required fields (description, amount, and category)")
+      return
+    }
+    
+    console.log("✅ Validation passed, inserting expense...")
+    
+    const expenseData = {
+      user_id: userId,
+      description: newExpense.description,
+      amount: newExpense.amount,
+      category: newExpense.category,
+      expense_date: newExpense.expense_date,
+    }
+    console.log("📤 Inserting data:", expenseData)
+    
+    const { data, error } = await supabase
+      .from("expenses")
+      .insert([expenseData])
+      .select()
+    
+    if (error) {
+      console.error("❌ Supabase error:", error)
+      console.error("Error details:", {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      })
+      alert(`Error adding expense: ${error.message}\n\nDetails: ${error.details || 'No details'}\n\nHint: ${error.hint || 'No hint'}`)
+      return
+    }
+    
+    if (data) {
+      console.log("✅ Expense added successfully:", data)
+      setExpenses([data[0], ...expenses])
+      setNewExpense({
+        description: "",
+        amount: 0,
+        category: "",
+        expense_date: new Date().toISOString().split("T")[0],
+      })
+      alert("Expense added successfully!")
+    } else {
+      console.error("⚠️ No data returned from insert")
     }
   }
 
@@ -155,8 +197,7 @@ export default function ExpensesPage() {
       description: expense.description,
       amount: expense.amount,
       category: expense.category,
-      date: expense.date,
-      isRecurring: expense.isRecurring,
+      expense_date: expense.expense_date,
     });
   };
 
@@ -173,8 +214,7 @@ export default function ExpensesPage() {
         description: editExpense.description,
         amount: editExpense.amount,
         category: editExpense.category,
-        date: editExpense.date,
-        isRecurring: editExpense.isRecurring,
+        expense_date: editExpense.expense_date,
       })
       .eq("id", id)
       .eq("user_id", userId)
@@ -373,26 +413,16 @@ export default function ExpensesPage() {
               </Select>
             </div>
             <div>
-              <Label htmlFor="date" className="text-white">
+              <Label htmlFor="expense_date" className="text-white">
                 Date
               </Label>
               <Input
-                id="date"
+                id="expense_date"
                 type="date"
-                value={newExpense.date}
-                onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })}
+                value={newExpense.expense_date}
+                onChange={(e) => setNewExpense({ ...newExpense, expense_date: e.target.value })}
                 className="bg-[#1A1A1B] border-gray-700 text-white"
               />
-            </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="recurring"
-                checked={newExpense.isRecurring}
-                onCheckedChange={(checked) => setNewExpense({ ...newExpense, isRecurring: checked })}
-              />
-              <Label htmlFor="recurring" className="text-white">
-                Recurring Expense
-              </Label>
             </div>
             <Button type="submit" className="w-full">
               Add Expense
@@ -703,18 +733,10 @@ export default function ExpensesPage() {
                           </Select>
                           <Input
                             type="date"
-                            value={editExpense.date}
-                            onChange={e => setEditExpense({ ...editExpense, date: e.target.value })}
+                            value={editExpense.expense_date}
+                            onChange={e => setEditExpense({ ...editExpense, expense_date: e.target.value })}
                             className="bg-[#232325] !text-white"
                           />
-                          <div className="flex items-center space-x-2">
-                            <Switch
-                              id={`edit-recurring-${expense.id}`}
-                              checked={editExpense.isRecurring}
-                              onCheckedChange={checked => setEditExpense({ ...editExpense, isRecurring: checked })}
-                            />
-                            <Label htmlFor={`edit-recurring-${expense.id}`} className="text-white text-xs">Recurring</Label>
-                          </div>
                         </div>
                       </div>
                       <div className="flex gap-2 ml-2">
@@ -727,13 +749,7 @@ export default function ExpensesPage() {
                       <div>
                         <p className="font-semibold text-white">{expense.description}</p>
                         <p className="text-sm text-gray-400">
-                          {expense.category} - {expense.date}
-                          {expense.isRecurring && (
-                            <span className="ml-2 text-blue-400">
-                              <Repeat className="h-4 w-4 inline mr-1" />
-                              Recurring
-                            </span>
-                          )}
+                          {expense.category} - {expense.expense_date}
                         </p>
                       </div>
                       <div className="flex items-center space-x-2">
