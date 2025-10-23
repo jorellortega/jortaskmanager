@@ -458,37 +458,6 @@ export default function FitnessPage() {
               {mainActivities.map((activity) => (
                 <Card key={activity.id} className={`bg-[#18181A] border ${activity.is_peer_activity ? 'border-blue-500' : 'border-gray-700'}`}>
                   <CardContent className={`p-4${activity.completed ? ' opacity-25' : ''}`}>
-                    {activity.is_peer_activity && (
-                      <div className="text-blue-400 text-sm font-medium mb-2 flex items-center justify-between">
-                        <span>👤 {activity.peer_name}</span>
-                        <div className="flex items-center gap-2">
-                          {activity.participant_count && activity.participant_count > 1 && (
-                            <span className="text-xs text-gray-400">
-                              {activity.participant_count} participants
-                            </span>
-                          )}
-                          {activity.user_participation ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => leaveActivity(activity.user_participation!.id)}
-                              className="text-red-400 border-red-400 hover:bg-red-400 hover:text-white"
-                            >
-                              Leave
-                            </Button>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => joinActivity(activity.id, activity.user_id)}
-                              className="text-green-400 border-green-400 hover:bg-green-400 hover:text-white"
-                            >
-                              Join
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    )}
                     {editingId === activity.id ? (
                       <>
                         <div className="flex flex-col gap-1 flex-1">
@@ -549,6 +518,37 @@ export default function FitnessPage() {
                               <Dumbbell className="h-4 w-4 text-blue-400 mr-2" />
                               {activity.activity}
                             </span>
+                            {activity.is_peer_activity && (
+                              <div className="flex items-center gap-2 ml-2">
+                                <span className="text-blue-400 text-sm font-medium">
+                                  👤 {activity.peer_name}
+                                </span>
+                                {activity.participant_count && activity.participant_count > 1 && (
+                                  <span className="text-xs text-gray-400">
+                                    {activity.participant_count} participants
+                                  </span>
+                                )}
+                                {activity.user_participation ? (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => leaveActivity(activity.user_participation!.id)}
+                                    className="text-gray-400 border-gray-600 bg-transparent hover:bg-transparent hover:text-green-400 hover:border-green-400"
+                                  >
+                                    Leave
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => joinActivity(activity.id, activity.user_id)}
+                                    className="text-gray-400 border-gray-600 bg-transparent hover:bg-transparent hover:text-green-400 hover:border-green-400"
+                                  >
+                                    Join
+                                  </Button>
+                                )}
+                              </div>
+                            )}
                           </div>
                           <div className="flex items-center space-x-2">
                             <span className="text-sm text-gray-400 flex items-center">

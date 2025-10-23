@@ -1772,6 +1772,9 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                                 onClick={(e) => e.stopPropagation()}
                               />
                               <div className="flex items-center space-x-2 flex-grow">
+                                <span className="text-white font-medium">
+                                  {activity.activity}
+                                </span>
                                 {activity.is_peer_activity && (
                                   <div className="flex items-center gap-2">
                                     <span className="text-blue-400 text-sm font-medium">
@@ -1787,7 +1790,7 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                                         size="sm"
                                         variant="outline"
                                         onClick={() => leaveFitnessActivity(activity.user_participation!.id)}
-                                        className="text-red-400 border-red-400 hover:bg-red-400 hover:text-white text-xs px-2 py-1"
+                                        className="text-gray-400 border-gray-600 bg-transparent hover:bg-transparent hover:text-green-400 hover:border-green-400 text-xs px-2 py-1"
                                       >
                                         Leave
                                       </Button>
@@ -1796,7 +1799,7 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                                         size="sm"
                                         variant="outline"
                                         onClick={() => joinFitnessActivity(activity.id, activity.user_id)}
-                                        className="text-green-400 border-green-400 hover:bg-green-400 hover:text-white text-xs px-2 py-1"
+                                        className="text-gray-400 border-gray-600 bg-transparent hover:bg-transparent hover:text-green-400 hover:border-green-400 text-xs px-2 py-1"
                                       >
                                         Join
                                       </Button>
@@ -1822,18 +1825,7 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                                     className="flex-grow p-1 rounded bg-[#18181A] border border-gray-700 text-white outline-none"
                                     onClick={(e) => e.stopPropagation()}
                                   />
-                                ) : (
-                                  <span 
-                                    className={activity.completed ? "line-through text-gray-500" : "text-white"}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      startEditingFitness(activity.id, activity.activity);
-                                    }}
-                                    title="Click to edit"
-                                  >
-                                    {activity.activity}
-                                  </span>
-                                )}
+                                ) : null}
                                 {hasFitnessSubtasksCount && (
                                   <button
                                     onClick={(e) => {
