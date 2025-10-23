@@ -169,45 +169,173 @@ export default function PeerSyncPage() {
   }
 
   const handlePeerRequest = async (requestId: string, action: 'accept' | 'reject') => {
-    if (!userId) return
+    console.log('🔍 handlePeerRequest called:', { requestId, action, userId })
+    
+    if (!userId) {
+      console.log('❌ No userId, returning early')
+      return
+    }
     
     setLoading(true)
     setError(null)
     
     const newStatus = action === 'accept' ? 'accepted' : 'rejected'
+    console.log('🔄 Updating peer request status to:', newStatus)
     
-    // Update the peer request status
-    const { data, error } = await supabase
+    // First, let's check if the record exists
+    console.log('🔍 Checking if peer request exists...')
+    const { data: existingRecord, error: fetchError } = await supabase
       .from("peers")
-      .update({ status: newStatus })
+      .select("*")
       .eq("id", requestId)
-      .select()
     
-    if (error) {
-      setError(`Failed to ${action} peer request.`)
-    } else if (data && data.length > 0) {
-      // If accepted, create a reciprocal connection
-      if (action === 'accept') {
-        const { error: reciprocalError } = await supabase
-          .from("peers")
-          .insert([{
-            user_id: userId,
-            peer_user_id: data[0].user_id,
-            status: 'accepted'
-          }])
+    console.log('📊 Existing record check:', { existingRecord, fetchError })
+    console.log('📊 Record details:', existingRecord?.[0])
+    
+    // Instead of updating, let's create new records and delete the old one
+    if (action === 'accept') {
+      console.log('🔄 Creating accepted peer connection...')
+      
+      // Get the requester's info
+      let requesterInfo = null
+      try {
+        console.log('🔍 Fetching requester info for:', existingRecord[0].user_id)
+        const { data: userData, error: userError } = await supabase
+          .rpc('get_user_info', { user_id_param: existingRecord[0].user_id })
         
-        if (reciprocalError) {
-          console.error('Failed to create reciprocal connection:', reciprocalError)
+        console.log('📊 Requester info result:', { userData, userError })
+        
+        if (!userError && userData && userData.length > 0) {
+          requesterInfo = userData[0]
+          console.log('✅ Got requester info:', requesterInfo)
         }
+      } catch (err) {
+        console.log("❌ Error fetching requester info:", err)
+      }
+      
+      // Create the accepted connection for the recipient
+      const { data: acceptedData, error: acceptedError } = await supabase
+        .from("peers")
+        .insert([{
+          user_id: userId,
+          peer_user_id: existingRecord[0].user_id,
+          status: 'accepted',
+          peer_name: requesterInfo?.name || null,
+          peer_email: requesterInfo?.email || null
+        }])
+        .select()
+      
+      console.log('📊 Accepted connection result:', { acceptedData, acceptedError })
+      
+      if (acceptedError) {
+        console.error('❌ Failed to create accepted connection:', acceptedError)
+        setError(`Failed to accept peer request: ${acceptedError.message}`)
+        setLoading(false)
+        return
+      }
+      
+      // Create reciprocal connection for the sender
+      console.log('🔄 Creating reciprocal connection...')
+      
+      // Get current user's info for the reciprocal connection
+      let currentUserInfo = null
+      try {
+        console.log('🔍 Fetching current user info for reciprocal connection...')
+        const { data: currentUserData, error: currentUserError } = await supabase
+          .rpc('get_user_info', { user_id_param: userId })
+        
+        console.log('📊 Current user info result:', { currentUserData, currentUserError })
+        
+        if (!currentUserError && currentUserData && currentUserData.length > 0) {
+          currentUserInfo = currentUserData[0]
+          console.log('✅ Got current user info:', currentUserInfo)
+        }
+      } catch (err) {
+        console.log("❌ Error fetching current user info:", err)
+      }
+      
+      const { error: reciprocalError } = await supabase
+        .from("peers")
+        .insert([{
+          user_id: existingRecord[0].user_id,
+          peer_user_id: userId,
+          status: 'accepted',
+          peer_name: currentUserInfo?.name || null,
+          peer_email: currentUserInfo?.email || null
+        }])
+      
+      console.log('📊 Reciprocal connection result:', { reciprocalError })
+      
+      if (reciprocalError) {
+        console.error('❌ Failed to create reciprocal connection:', reciprocalError)
+        setError(`Failed to create reciprocal connection: ${reciprocalError.message}`)
+        setLoading(false)
+        return
+      }
+      
+      // Delete the original pending request
+      console.log('🔄 Deleting original pending request...')
+      const { error: deleteError } = await supabase
+        .from("peers")
+        .delete()
+        .eq("id", requestId)
+      
+      console.log('📊 Delete result:', { deleteError })
+      
+      if (deleteError) {
+        console.error('❌ Failed to delete original request:', deleteError)
+        // Don't return here, the connections were created successfully
+      } else {
+        console.log('✅ Original pending request deleted successfully')
+      }
+      
+      // Also clean up any duplicate pending records between these users
+      console.log('🔄 Cleaning up any duplicate pending records...')
+      const { error: cleanupError } = await supabase
+        .from("peers")
+        .delete()
+        .eq("user_id", existingRecord[0].user_id)
+        .eq("peer_user_id", userId)
+        .eq("status", "pending")
+      
+      if (cleanupError) {
+        console.log('⚠️ Cleanup warning (non-critical):', cleanupError)
+      } else {
+        console.log('✅ Duplicate cleanup completed')
+      }
+      
+      // Update local state
+      console.log('🔄 Updating local state...')
+      setPeerRequests(prev => prev.filter(req => req.id !== requestId))
+      if (acceptedData && acceptedData.length > 0) {
+        setPeers(prev => [...prev, acceptedData[0]])
+        console.log('✅ Added peer to local state')
+      }
+      
+      console.log('✅ Showing success message')
+      setSuccessMessage('Peer request accepted successfully!')
+      setTimeout(() => setSuccessMessage(null), 3000)
+      
+    } else {
+      // For reject, just delete the request
+      console.log('🔄 Rejecting peer request...')
+      const { error: deleteError } = await supabase
+        .from("peers")
+        .delete()
+        .eq("id", requestId)
+      
+      console.log('📊 Delete result:', { deleteError })
+      
+      if (deleteError) {
+        console.error('❌ Failed to delete rejected request:', deleteError)
+        setError(`Failed to reject peer request: ${deleteError.message}`)
+        setLoading(false)
+        return
       }
       
       // Update local state
       setPeerRequests(prev => prev.filter(req => req.id !== requestId))
-      if (action === 'accept') {
-        setPeers(prev => [...prev, data[0]])
-      }
-      
-      setSuccessMessage(`Peer request ${action}ed successfully!`)
+      setSuccessMessage('Peer request rejected successfully!')
       setTimeout(() => setSuccessMessage(null), 3000)
     }
     setLoading(false)
