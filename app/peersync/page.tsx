@@ -80,7 +80,28 @@ export default function PeerSyncPage() {
       if (requestsError) {
         setError("Failed to fetch peer requests.")
       } else {
-        setPeerRequests(requestsData || [])
+        // Fetch requester info for each incoming request
+        const requestsWithInfo = await Promise.all(
+          (requestsData || []).map(async (request) => {
+            try {
+              const { data: userData, error: userError } = await supabase
+                .rpc('get_user_info', { user_id_param: request.user_id })
+              
+              if (!userError && userData && userData.length > 0) {
+                return {
+                  ...request,
+                  requester_name: userData[0].name,
+                  requester_email: userData[0].email
+                }
+              }
+              return request
+            } catch (err) {
+              console.log("Error fetching requester info:", err)
+              return request
+            }
+          })
+        )
+        setPeerRequests(requestsWithInfo)
       }
       setLoading(false)
     }
