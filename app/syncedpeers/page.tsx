@@ -21,7 +21,13 @@ type Peer = {
   peer_user_id: string
   status: 'pending' | 'accepted' | 'rejected' | 'blocked'
   created_at: string
-  updated_at: string
+  sync_state?: string
+  last_synced?: string
+  active_features?: string[]
+  peer_name?: string
+  peer_email?: string
+  requester_name?: string
+  requester_email?: string
 }
 
 type PeerData = {
@@ -175,11 +181,11 @@ export default function SyncedPeersPage() {
                   <div className="flex items-center justify-between">
                                       <div className="flex items-center gap-4">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${getStatusColor(peer.status)}`}>
-                      {peer.peer_user_id.slice(0, 2).toUpperCase()}
+                      {(peer.peer_name || peer.peer_email || peer.peer_user_id).slice(0, 2).toUpperCase()}
                     </div>
                     <div>
                       <h3 className="text-white font-medium flex items-center gap-2">
-                        Peer: {peer.peer_user_id.slice(0, 8)}...
+                        {peer.peer_name || peer.peer_email || `Peer: ${peer.peer_user_id.slice(0, 8)}...`}
                         <span className={`w-2 h-2 rounded-full ${getStatusColor(peer.status)}`} />
                         {peer.status === "pending" && (
                           <span className="text-xs px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-300">
@@ -283,7 +289,7 @@ export default function SyncedPeersPage() {
             <DialogTitle>Block Peer</DialogTitle>
           </DialogHeader>
           <div className="py-4">
-            <p>Are you sure you want to block {selectedPeer?.peer_user_id}? This will:</p>
+            <p>Are you sure you want to block {selectedPeer?.peer_name || selectedPeer?.peer_email || selectedPeer?.peer_user_id}? This will:</p>
             <ul className="list-disc list-inside mt-2 text-gray-400">
               <li>Stop all syncing activities</li>
               <li>Prevent future sync requests</li>

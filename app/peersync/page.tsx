@@ -34,6 +34,7 @@ type PeerRequest = {
 
 export default function PeerSyncPage() {
   const [syncKey, setSyncKey] = useState("")
+  const [peerName, setPeerName] = useState("")
   const [scannedCode, setScannedCode] = useState("")
   const [userId, setUserId] = useState<string | null>(null)
   const [userCode, setUserCode] = useState<string>("")
@@ -98,6 +99,26 @@ export default function PeerSyncPage() {
       return
     }
     setLoading(true)
+    
+    // First, try to get the peer's user info
+    let peerInfo = null
+    try {
+      console.log("🔍 Fetching peer info for:", code)
+      const { data: userData, error: userError } = await supabase
+        .rpc('get_user_info', { user_id_param: code })
+      
+      console.log("🔍 Peer info result:", { userData, userError })
+      
+      if (!userError && userData && userData.length > 0) {
+        peerInfo = userData[0]
+        console.log("✅ Got peer info:", peerInfo)
+      } else {
+        console.log("❌ No peer info found or error:", userError)
+      }
+    } catch (err) {
+      console.log("❌ Error fetching peer info:", err)
+    }
+    
     const { data, error: insertError } = await supabase
       .from("peers")
       .insert([
@@ -105,6 +126,8 @@ export default function PeerSyncPage() {
           user_id: userId,
           peer_user_id: code,
           status: "pending",
+          peer_name: peerInfo?.name || peerName || null,
+          peer_email: peerInfo?.email || null,
         },
       ])
       .select()
@@ -113,6 +136,7 @@ export default function PeerSyncPage() {
     } else if (data && data.length > 0) {
       setPeers((prev) => [data[0], ...prev])
       setSyncKey("")
+      setPeerName("")
       setScannedCode("")
     }
     setLoading(false)
@@ -233,6 +257,18 @@ export default function PeerSyncPage() {
                   className="bg-[#1A1A1B] border-gray-700 text-white"
                 />
               </div>
+              <div>
+                <Label htmlFor="peerName" className="text-white">
+                  Peer Name (Optional)
+                </Label>
+                <Input
+                  id="peerName"
+                  value={peerName}
+                  onChange={(e) => setPeerName(e.target.value)}
+                  placeholder="Enter peer's name for easier identification"
+                  className="bg-[#1A1A1B] border-gray-700 text-white"
+                />
+              </div>
               <Button type="submit" className="w-full">
                 Add Peer
               </Button>
@@ -268,7 +304,7 @@ export default function PeerSyncPage() {
                   <div>
                     <div className="text-white font-medium">New Peer Request</div>
                     <div className="text-sm text-gray-400">
-                      User ID: {request.user_id.substring(0, 8)}...
+                      {request.requester_name || request.requester_email || `User ID: ${request.user_id.substring(0, 8)}...`}
                     </div>
                     <div className="text-xs text-gray-500">
                       {format(new Date(request.created_at), "MMM d, yyyy HH:mm")}
@@ -342,7 +378,7 @@ export default function PeerSyncPage() {
                 <div key={peer.id} className="flex flex-col md:flex-row md:justify-between md:items-center bg-[#1A1A1B] p-3 rounded border border-gray-700">
                   <div>
                     <div className="text-white font-medium">
-                      Peer ID: {peer.peer_user_id.substring(0, 8)}...
+                      {peer.peer_name || peer.peer_email || `Peer ID: ${peer.peer_user_id.substring(0, 8)}...`}
                     </div>
                     <div className="text-sm text-gray-400">
                       Status: <span className={`px-2 py-1 rounded text-xs ${
