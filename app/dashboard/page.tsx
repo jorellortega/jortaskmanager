@@ -78,6 +78,12 @@ type FitnessActivity = {
   created_at?: string
   peer_name?: string  // For peer activities
   is_peer_activity?: boolean  // To distinguish peer activities
+  participant_count?: number  // Number of participants
+  user_participation?: {
+    id: string
+    status: string
+    note?: string
+  }  // User's participation status
 }
 
 type WorkPriority = {
@@ -227,12 +233,32 @@ export default function WeeklyTaskManager() {
                 .eq("user_id", peer.peer_user_id)
               
               if (peerActivities && !peerActivitiesError) {
-                // Add peer activities with peer info
-                const peerActivitiesWithInfo = peerActivities.map(activity => ({
-                  ...activity,
-                  peer_name: peer.peer_name || "Peer",
-                  is_peer_activity: true
-                }))
+                // Add peer activities with peer info and participant data
+                const peerActivitiesWithInfo = await Promise.all(
+                  peerActivities.map(async (activity) => {
+                    // Fetch participant count for this activity
+                    const { data: participants, error: participantsError } = await supabase
+                      .from("activity_participants")
+                      .select("*")
+                      .eq("activity_id", activity.id)
+                      .eq("activity_type", "fitness")
+                    
+                    // Check if current user has joined this activity
+                    const userParticipation = participants?.find(p => p.user_id === user.id)
+                    
+                    return {
+                      ...activity,
+                      peer_name: peer.peer_name || "Peer",
+                      is_peer_activity: true,
+                      participant_count: (participants?.length || 0) + 1, // +1 for the original creator
+                      user_participation: userParticipation ? {
+                        id: userParticipation.id,
+                        status: userParticipation.status,
+                        note: userParticipation.note
+                      } : undefined
+                    }
+                  })
+                )
                 allFitnessActivities = [...allFitnessActivities, ...peerActivitiesWithInfo]
               }
             }
@@ -553,6 +579,45 @@ export default function WeeklyTaskManager() {
     }
     setLoading(false);
   };
+
+  const joinFitnessActivity = async (activityId: string, peerUserId: string) => {
+    if (!userId) return
+    
+    setLoading(true)
+    const { error } = await supabase
+      .from("activity_participants")
+      .insert([{
+        activity_id: activityId,
+        activity_type: "fitness",
+        user_id: userId,
+        peer_user_id: peerUserId,
+        status: "joined"
+      }])
+    
+    if (error) {
+      setError("Failed to join activity.")
+    } else {
+      // Refresh page to show updated participant count
+      window.location.reload()
+    }
+    setLoading(false)
+  }
+
+  const leaveFitnessActivity = async (participationId: string) => {
+    setLoading(true)
+    const { error } = await supabase
+      .from("activity_participants")
+      .delete()
+      .eq("id", participationId)
+    
+    if (error) {
+      setError("Failed to leave activity.")
+    } else {
+      // Refresh page to show updated participant count
+      window.location.reload()
+    }
+    setLoading(false)
+  }
   const handleToggleLeisure = async (id: string, completed: boolean) => {
     setLoading(true);
     setError(null);
@@ -1685,9 +1750,7 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                 (activity) => activity.activity_date === focusedDate && !activity.parent_id,
               ) && (
                 <div className="mt-4">
-                  <h3 className="text-green-400 font-semibold mb-2">
-                    Fitness Activities{fitnessActivities.some(a => a.is_peer_activity && a.activity_date === focusedDate) ? ' (with peers)' : ':'}
-                  </h3>
+                  <h3 className="text-green-400 font-semibold mb-2">Fitness Activities:</h3>
                   <div className="space-y-2">
                     {fitnessActivities
                       .filter((activity) => activity.activity_date === focusedDate && !activity.parent_id)
@@ -1710,9 +1773,35 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                               />
                               <div className="flex items-center space-x-2 flex-grow">
                                 {activity.is_peer_activity && (
-                                  <span className="text-blue-400 text-sm font-medium">
-                                    👤 {activity.peer_name}
-                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-blue-400 text-sm font-medium">
+                                      👤 {activity.peer_name}
+                                    </span>
+                                    {activity.participant_count && activity.participant_count > 1 && (
+                                      <span className="text-xs text-gray-400">
+                                        {activity.participant_count} participants
+                                      </span>
+                                    )}
+                                    {activity.user_participation ? (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => leaveFitnessActivity(activity.user_participation!.id)}
+                                        className="text-red-400 border-red-400 hover:bg-red-400 hover:text-white text-xs px-2 py-1"
+                                      >
+                                        Leave
+                                      </Button>
+                                    ) : (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => joinFitnessActivity(activity.id, activity.user_id)}
+                                        className="text-green-400 border-green-400 hover:bg-green-400 hover:text-white text-xs px-2 py-1"
+                                      >
+                                        Join
+                                      </Button>
+                                    )}
+                                  </div>
                                 )}
                                 {editingFitnessId === activity.id ? (
                                   <input

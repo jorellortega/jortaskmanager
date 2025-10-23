@@ -25,6 +25,12 @@ type FitnessActivity = {
   created_at?: string
   peer_name?: string  // For peer activities
   is_peer_activity?: boolean  // To distinguish peer activities
+  participant_count?: number  // Number of participants
+  user_participation?: {
+    id: string
+    status: string
+    note?: string
+  }  // User's participation status
 }
 
 export default function FitnessPage() {
@@ -110,12 +116,32 @@ export default function FitnessPage() {
               .order("activity_date", { ascending: true })
             
             if (peerActivities && !peerActivitiesError) {
-              // Add peer activities with peer info
-              const peerActivitiesWithInfo = peerActivities.map(activity => ({
-                ...activity,
-                peer_name: peer.peer_name || "Peer",
-                is_peer_activity: true
-              }))
+              // Add peer activities with peer info and participant data
+              const peerActivitiesWithInfo = await Promise.all(
+                peerActivities.map(async (activity) => {
+                  // Fetch participant count for this activity
+                  const { data: participants, error: participantsError } = await supabase
+                    .from("activity_participants")
+                    .select("*")
+                    .eq("activity_id", activity.id)
+                    .eq("activity_type", "fitness")
+                  
+                  // Check if current user has joined this activity
+                  const userParticipation = participants?.find(p => p.user_id === user.id)
+                  
+                  return {
+                    ...activity,
+                    peer_name: peer.peer_name || "Peer",
+                    is_peer_activity: true,
+                    participant_count: (participants?.length || 0) + 1, // +1 for the original creator
+                    user_participation: userParticipation ? {
+                      id: userParticipation.id,
+                      status: userParticipation.status,
+                      note: userParticipation.note
+                    } : undefined
+                  }
+                })
+              )
               allActivities = [...allActivities, ...peerActivitiesWithInfo]
             }
           }
@@ -208,6 +234,45 @@ export default function FitnessPage() {
       setError(updateError.message || "Failed to update activity.")
     } else if (data && data.length > 0) {
       setActivities((prev) => prev.map((a) => (a.id === id ? data[0] : a)))
+    }
+    setLoading(false)
+  }
+
+  const joinActivity = async (activityId: string, peerUserId: string) => {
+    if (!userId) return
+    
+    setLoading(true)
+    const { error } = await supabase
+      .from("activity_participants")
+      .insert([{
+        activity_id: activityId,
+        activity_type: "fitness",
+        user_id: userId,
+        peer_user_id: peerUserId,
+        status: "joined"
+      }])
+    
+    if (error) {
+      setError("Failed to join activity.")
+    } else {
+      // Refresh activities to show updated participant count
+      window.location.reload()
+    }
+    setLoading(false)
+  }
+
+  const leaveActivity = async (participationId: string) => {
+    setLoading(true)
+    const { error } = await supabase
+      .from("activity_participants")
+      .delete()
+      .eq("id", participationId)
+    
+    if (error) {
+      setError("Failed to leave activity.")
+    } else {
+      // Refresh activities to show updated participant count
+      window.location.reload()
     }
     setLoading(false)
   }
@@ -394,8 +459,34 @@ export default function FitnessPage() {
                 <Card key={activity.id} className={`bg-[#18181A] border ${activity.is_peer_activity ? 'border-blue-500' : 'border-gray-700'}`}>
                   <CardContent className={`p-4${activity.completed ? ' opacity-25' : ''}`}>
                     {activity.is_peer_activity && (
-                      <div className="text-blue-400 text-sm font-medium mb-2">
-                        👤 {activity.peer_name}
+                      <div className="text-blue-400 text-sm font-medium mb-2 flex items-center justify-between">
+                        <span>👤 {activity.peer_name}</span>
+                        <div className="flex items-center gap-2">
+                          {activity.participant_count && activity.participant_count > 1 && (
+                            <span className="text-xs text-gray-400">
+                              {activity.participant_count} participants
+                            </span>
+                          )}
+                          {activity.user_participation ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => leaveActivity(activity.user_participation!.id)}
+                              className="text-red-400 border-red-400 hover:bg-red-400 hover:text-white"
+                            >
+                              Leave
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => joinActivity(activity.id, activity.user_id)}
+                              className="text-green-400 border-green-400 hover:bg-green-400 hover:text-white"
+                            >
+                              Join
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     )}
                     {editingId === activity.id ? (
