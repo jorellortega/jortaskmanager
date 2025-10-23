@@ -23,6 +23,8 @@ type FitnessActivity = {
   completed: boolean
   parent_id?: string | null
   created_at?: string
+  peer_name?: string  // For peer activities
+  is_peer_activity?: boolean  // To distinguish peer activities
 }
 
 export default function FitnessPage() {
@@ -53,16 +55,77 @@ export default function FitnessPage() {
         return
       }
       setUserId(user.id)
-      const { data, error: fetchError } = await supabase
+      
+      // Fetch user's own activities
+      const { data: userActivities, error: fetchError } = await supabase
         .from("fitness_activities")
         .select("*")
         .eq("user_id", user.id)
         .order("activity_date", { ascending: true })
+      
       if (fetchError) {
         setError("Failed to fetch activities.")
-      } else {
-        setActivities(data || [])
+        setLoading(false)
+        return
       }
+      
+      // Fetch peer activities
+      const { data: peers, error: peersError } = await supabase
+        .from("peers")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("status", "accepted")
+      
+      if (peersError) {
+        console.log("Error fetching peers:", peersError)
+      }
+      
+      let allActivities = [...(userActivities || [])]
+      
+      // Check if user has fitness sync enabled
+      const { data: userPrefs, error: prefsError } = await supabase
+        .from("peer_sync_preferences")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("preference_key", "fitness")
+        .eq("enabled", true)
+      
+      if (userPrefs && userPrefs.length > 0 && peers) {
+        // User has fitness sync enabled, fetch peer activities
+        for (const peer of peers) {
+          // Check if peer also has fitness enabled
+          const { data: peerPrefs, error: peerPrefsError } = await supabase
+            .from("peer_sync_preferences")
+            .select("*")
+            .eq("user_id", peer.peer_user_id)
+            .eq("preference_key", "fitness")
+            .eq("enabled", true)
+          
+          if (peerPrefs && peerPrefs.length > 0) {
+            // Both users have fitness enabled, fetch peer's activities
+            const { data: peerActivities, error: peerActivitiesError } = await supabase
+              .from("fitness_activities")
+              .select("*")
+              .eq("user_id", peer.peer_user_id)
+              .order("activity_date", { ascending: true })
+            
+            if (peerActivities && !peerActivitiesError) {
+              // Add peer activities with peer info
+              const peerActivitiesWithInfo = peerActivities.map(activity => ({
+                ...activity,
+                peer_name: peer.peer_name || "Peer",
+                is_peer_activity: true
+              }))
+              allActivities = [...allActivities, ...peerActivitiesWithInfo]
+            }
+          }
+        }
+      }
+      
+      // Sort all activities by date
+      allActivities.sort((a, b) => new Date(a.activity_date).getTime() - new Date(b.activity_date).getTime())
+      
+      setActivities(allActivities)
       setLoading(false)
     }
     fetchActivities()
@@ -320,7 +383,7 @@ export default function FitnessPage() {
       </Card>
       <Card className="bg-[#141415] border border-gray-700">
         <CardHeader>
-          <CardTitle className="text-white">Your Fitness Activities</CardTitle>
+          <CardTitle className="text-white">Fitness Activities</CardTitle>
         </CardHeader>
         <CardContent>
           {mainActivities.length === 0 ? (
@@ -328,8 +391,13 @@ export default function FitnessPage() {
           ) : (
             <div className="space-y-4">
               {mainActivities.map((activity) => (
-                <Card key={activity.id} className="bg-[#18181A] border border-gray-700">
+                <Card key={activity.id} className={`bg-[#18181A] border ${activity.is_peer_activity ? 'border-blue-500' : 'border-gray-700'}`}>
                   <CardContent className={`p-4${activity.completed ? ' opacity-25' : ''}`}>
+                    {activity.is_peer_activity && (
+                      <div className="text-blue-400 text-sm font-medium mb-2">
+                        👤 {activity.peer_name}
+                      </div>
+                    )}
                     {editingId === activity.id ? (
                       <>
                         <div className="flex flex-col gap-1 flex-1">

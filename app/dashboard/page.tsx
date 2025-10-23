@@ -76,6 +76,8 @@ type FitnessActivity = {
   completed: boolean
   parent_id?: string | null
   created_at?: string
+  peer_name?: string  // For peer activities
+  is_peer_activity?: boolean  // To distinguish peer activities
 }
 
 type WorkPriority = {
@@ -187,6 +189,56 @@ export default function WeeklyTaskManager() {
         .from("fitness_activities")
         .select("*")
         .eq("user_id", user.id)
+      
+      // Fetch peer fitness activities
+      let allFitnessActivities = [...(fitnessData || [])]
+      
+      // Check if user has fitness sync enabled
+      const { data: userPrefs, error: prefsError } = await supabase
+        .from("peer_sync_preferences")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("preference_key", "fitness")
+        .eq("enabled", true)
+      
+      if (userPrefs && userPrefs.length > 0) {
+        // User has fitness sync enabled, fetch peer activities
+        const { data: peers, error: peersError } = await supabase
+          .from("peers")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("status", "accepted")
+        
+        if (peers && !peersError) {
+          for (const peer of peers) {
+            // Check if peer also has fitness enabled
+            const { data: peerPrefs, error: peerPrefsError } = await supabase
+              .from("peer_sync_preferences")
+              .select("*")
+              .eq("user_id", peer.peer_user_id)
+              .eq("preference_key", "fitness")
+              .eq("enabled", true)
+            
+            if (peerPrefs && peerPrefs.length > 0) {
+              // Both users have fitness enabled, fetch peer's activities
+              const { data: peerActivities, error: peerActivitiesError } = await supabase
+                .from("fitness_activities")
+                .select("*")
+                .eq("user_id", peer.peer_user_id)
+              
+              if (peerActivities && !peerActivitiesError) {
+                // Add peer activities with peer info
+                const peerActivitiesWithInfo = peerActivities.map(activity => ({
+                  ...activity,
+                  peer_name: peer.peer_name || "Peer",
+                  is_peer_activity: true
+                }))
+                allFitnessActivities = [...allFitnessActivities, ...peerActivitiesWithInfo]
+              }
+            }
+          }
+        }
+      }
       // Fetch work priorities
       const { data: workData, error: workError } = await supabase
         .from("work_priorities")
@@ -203,7 +255,7 @@ export default function WeeklyTaskManager() {
         setTodos(todosData || [])
         setAppointments(appointmentsData || [])
         setLeisureActivities(leisureData || [])
-        setFitnessActivities(fitnessData || [])
+        setFitnessActivities(allFitnessActivities)
         setWorkPriorities(workData || [])
         setSelfDevPriorities(selfDevData || [])
       }
@@ -1633,7 +1685,9 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                 (activity) => activity.activity_date === focusedDate && !activity.parent_id,
               ) && (
                 <div className="mt-4">
-                  <h3 className="text-green-400 font-semibold mb-2">Fitness Activities:</h3>
+                  <h3 className="text-green-400 font-semibold mb-2">
+                    Fitness Activities{fitnessActivities.some(a => a.is_peer_activity && a.activity_date === focusedDate) ? ' (with peers)' : ':'}
+                  </h3>
                   <div className="space-y-2">
                     {fitnessActivities
                       .filter((activity) => activity.activity_date === focusedDate && !activity.parent_id)
@@ -1655,6 +1709,11 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                                 onClick={(e) => e.stopPropagation()}
                               />
                               <div className="flex items-center space-x-2 flex-grow">
+                                {activity.is_peer_activity && (
+                                  <span className="text-blue-400 text-sm font-medium">
+                                    👤 {activity.peer_name}
+                                  </span>
+                                )}
                                 {editingFitnessId === activity.id ? (
                                   <input
                                     type="text"

@@ -140,31 +140,44 @@ export default function PeerSettingsPage() {
 
   useEffect(() => {
     const fetchUserAndPreferences = async () => {
+      console.log('🔍 fetchUserAndPreferences called')
       setLoading(true)
       setError(null)
       
       const { data: { user }, error: userError } = await supabase.auth.getUser()
+      console.log('👤 User auth result:', { user: user?.id, error: userError })
+      
       if (userError || !user) {
+        console.log('❌ No user found')
         setError("You must be logged in to view sync preferences.")
         setLoading(false)
         return
       }
       setUserId(user.id)
+      console.log('✅ User ID set:', user.id)
       
       // Fetch user's sync preferences from database
+      console.log('🔍 Fetching preferences from database...')
       const { data: prefsData, error: prefsError } = await supabase
         .from("peer_sync_preferences")
         .select("*")
         .eq("user_id", user.id)
       
+      console.log('📊 Database query result:', { prefsData, prefsError })
+      
       if (prefsError) {
+        console.log('❌ Database error:', prefsError)
         setError("Failed to fetch sync preferences.")
       } else if (prefsData && prefsData.length > 0) {
+        console.log('✅ Found preferences:', prefsData.length, 'records')
         // Update preferences with database values
         setPreferences(prev => prev.map(pref => {
-          const dbPref = prefsData.find(p => p.category === pref.id)
+          const dbPref = prefsData.find(p => p.preference_key === pref.id)
+          console.log(`🔍 Checking preference ${pref.id}:`, { dbPref, enabled: dbPref?.enabled })
           return dbPref ? { ...pref, enabled: dbPref.enabled } : pref
         }))
+      } else {
+        console.log('⚠️ No preferences found in database')
       }
       
       setLoading(false)
@@ -174,15 +187,24 @@ export default function PeerSettingsPage() {
   }, [])
 
   const togglePreference = (id: string) => {
+    console.log('🔄 Toggling preference:', id)
     setPreferences(prev =>
-      prev.map(pref =>
-        pref.id === id ? { ...pref, enabled: !pref.enabled } : pref
-      )
+      prev.map(pref => {
+        if (pref.id === id) {
+          console.log(`✅ Toggled ${id} from ${pref.enabled} to ${!pref.enabled}`)
+          return { ...pref, enabled: !pref.enabled }
+        }
+        return pref
+      })
     )
   }
 
   const handleSave = async () => {
-    if (!userId) return
+    console.log('💾 handleSave called')
+    if (!userId) {
+      console.log('❌ No userId, cannot save')
+      return
+    }
     
     setLoading(true)
     setError(null)
@@ -191,21 +213,28 @@ export default function PeerSettingsPage() {
       // Update all preferences in database
       const updates = preferences.map(pref => ({
         user_id: userId,
-        category: pref.id,
+        preference_key: pref.id,
         enabled: pref.enabled
       }))
       
+      console.log('📤 Saving updates to database:', updates)
+      
       const { error } = await supabase
         .from("peer_sync_preferences")
-        .upsert(updates, { onConflict: 'user_id,category' })
+        .upsert(updates, { onConflict: 'user_id,preference_key' })
+      
+      console.log('📊 Save result:', { error })
       
       if (error) {
+        console.log('❌ Save error:', error)
         setError("Failed to save preferences.")
       } else {
+        console.log('✅ Save successful!')
         setSuccessMessage("Preferences saved successfully!")
         setTimeout(() => setSuccessMessage(null), 3000)
       }
     } catch (err) {
+      console.log('❌ Save exception:', err)
       setError("An error occurred while saving preferences.")
     }
     
