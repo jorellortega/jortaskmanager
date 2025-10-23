@@ -73,6 +73,8 @@ type FitnessActivity = {
   user_id: string
   activity: string
   activity_date: string
+  activity_time?: string | null
+  activity_end_time?: string | null
   completed: boolean
   parent_id?: string | null
   created_at?: string
@@ -554,6 +556,18 @@ export default function WeeklyTaskManager() {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.push('/');
+  };
+
+  // Convert 24-hour time to 12-hour format
+  const convertTo12Hour = (time24: string) => {
+    if (!time24) return '';
+    
+    const [hours, minutes] = time24.split(':');
+    const hour24 = parseInt(hours);
+    const hour12 = ((hour24 + 11) % 12) + 1;
+    const ampm = hour24 < 12 ? 'AM' : 'PM';
+    const display = `${hour12}:${minutes} ${ampm}`;
+    return display;
   };
 
   function isCurrentDay(day: string) {
@@ -1772,9 +1786,17 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                                 onClick={(e) => e.stopPropagation()}
                               />
                               <div className="flex items-center space-x-2 flex-grow">
-                                <span className="text-white font-medium">
-                                  {activity.activity}
-                                </span>
+                                <div>
+                                  <div className="text-white font-bold">
+                                    {activity.activity}
+                                  </div>
+                                  {activity.activity_time && (
+                                    <div className="text-gray-400 text-sm">
+                                      {convertTo12Hour(activity.activity_time)}
+                                      {activity.activity_end_time && ` - ${convertTo12Hour(activity.activity_end_time)}`}
+                                    </div>
+                                  )}
+                                </div>
                                 {activity.is_peer_activity && (
                                   <div className="flex items-center gap-2">
                                     <span className="text-blue-400 text-sm font-medium">
@@ -1782,7 +1804,7 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                                     </span>
                                     {activity.participant_count && activity.participant_count > 1 && (
                                       <span className="text-xs text-gray-400">
-                                        {activity.participant_count} participants
+                                        ({activity.participant_count})
                                       </span>
                                     )}
                                     {activity.user_participation ? (

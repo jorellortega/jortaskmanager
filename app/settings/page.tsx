@@ -127,6 +127,23 @@ export default function Settings() {
         </CardContent>
       </Card>
 
+      {/* Navigation Customization */}
+      <Card className="bg-[#141415] border border-gray-700 mb-4">
+        <CardHeader>
+          <CardTitle className="flex items-center text-green-400">
+            <span className="text-green-400">Navigation</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-gray-400 text-sm mb-4">Customize which pages appear in your navigation bar</p>
+          <Link href="/nav-customization">
+            <Button className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg">
+              Customize Navigation
+            </Button>
+          </Link>
+        </CardContent>
+      </Card>
+
       {/* Time Sync Button */}
       <div className="flex justify-center mt-8">
         <Link href="/time-sync">

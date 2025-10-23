@@ -20,6 +20,7 @@ type FitnessActivity = {
   activity: string
   activity_date: string
   activity_time?: string | null
+  activity_end_time?: string | null
   completed: boolean
   parent_id?: string | null
   created_at?: string
@@ -38,6 +39,7 @@ export default function FitnessPage() {
   const [newActivity, setNewActivity] = useState("")
   const [newDate, setNewDate] = useState(format(new Date(), "yyyy-MM-dd"))
   const [newTime, setNewTime] = useState("");
+  const [newEndTime, setNewEndTime] = useState("");
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
@@ -45,6 +47,7 @@ export default function FitnessPage() {
   const [editActivity, setEditActivity] = useState("");
   const [editDate, setEditDate] = useState("");
   const [editTime, setEditTime] = useState("");
+  const [editEndTime, setEditEndTime] = useState("");
   
   // Subtask state
   const [subtasks, setSubtasks] = useState<string[]>([""])
@@ -175,6 +178,7 @@ export default function FitnessPage() {
             activity: newActivity.trim(),
             activity_date: newDate,
             activity_time: newTime || null,
+            activity_end_time: newEndTime || null,
             completed: false,
             parent_id: null,
           },
@@ -217,6 +221,7 @@ export default function FitnessPage() {
       setNewActivity("")
       setNewDate(format(new Date(), "yyyy-MM-dd"))
       setNewTime("")
+      setNewEndTime("")
       setSubtasks([""])
       setLoading(false)
     }
@@ -297,19 +302,21 @@ export default function FitnessPage() {
     setEditActivity(activity.activity);
     setEditDate(activity.activity_date);
     setEditTime(activity.activity_time || "");
+    setEditEndTime(activity.activity_end_time || "");
   };
   const cancelEdit = () => {
     setEditingId(null);
     setEditActivity("");
     setEditDate("");
     setEditTime("");
+    setEditEndTime("");
   };
   const saveEdit = async (id: string) => {
     setError(null);
     setLoading(true);
     const { data, error: updateError } = await supabase
       .from("fitness_activities")
-      .update({ activity: editActivity, activity_date: editDate, activity_time: editTime || null })
+      .update({ activity: editActivity, activity_date: editDate, activity_time: editTime || null, activity_end_time: editEndTime || null })
       .eq("id", id)
       .select();
     if (updateError) {
@@ -414,29 +421,55 @@ export default function FitnessPage() {
               onChange={(e) => setNewDate(e.target.value)}
               className="bg-[#1A1A1B] border-gray-700 text-white"
             />
-            <Select
-              value={newTime}
-              onValueChange={setNewTime}
-            >
-              <SelectTrigger id="activity-time" className="bg-[#1A1A1B] border-gray-700 text-white w-full rounded px-3 py-2">
-                <SelectValue placeholder="Select a time (optional)" className="!text-white !placeholder:text-gray-400" />
-              </SelectTrigger>
-              <SelectContent className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
-                {Array.from({ length: 24 * 2 }, (_, i) => {
-                  const hour24 = Math.floor(i / 2);
-                  const min = i % 2 === 0 ? '00' : '30';
-                  const hour12 = ((hour24 + 11) % 12) + 1;
-                  const ampm = hour24 < 12 ? 'AM' : 'PM';
-                  const display = `${hour12.toString().padStart(2, '0')}:${min} ${ampm}`;
-                  const value = `${hour24.toString().padStart(2, '0')}:${min}`;
-                  return (
-                    <SelectItem key={value} value={value} className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
-                      {display}
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
+            <div className="flex gap-2">
+              <Select
+                value={newTime}
+                onValueChange={setNewTime}
+              >
+                <SelectTrigger id="activity-time" className="bg-[#1A1A1B] border-gray-700 text-white w-full rounded px-3 py-2">
+                  <SelectValue placeholder="Start time (optional)" className="!text-white !placeholder:text-gray-400" />
+                </SelectTrigger>
+                <SelectContent className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                  {Array.from({ length: 24 * 2 }, (_, i) => {
+                    const hour24 = Math.floor(i / 2);
+                    const min = i % 2 === 0 ? '00' : '30';
+                    const hour12 = ((hour24 + 11) % 12) + 1;
+                    const ampm = hour24 < 12 ? 'AM' : 'PM';
+                    const display = `${hour12.toString().padStart(2, '0')}:${min} ${ampm}`;
+                    const value = `${hour24.toString().padStart(2, '0')}:${min}`;
+                    return (
+                      <SelectItem key={value} value={value} className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                        {display}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+              
+              <Select
+                value={newEndTime}
+                onValueChange={setNewEndTime}
+              >
+                <SelectTrigger id="activity-end-time" className="bg-[#1A1A1B] border-gray-700 text-white w-full rounded px-3 py-2">
+                  <SelectValue placeholder="End time (optional)" className="!text-white !placeholder:text-gray-400" />
+                </SelectTrigger>
+                <SelectContent className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                  {Array.from({ length: 24 * 2 }, (_, i) => {
+                    const hour24 = Math.floor(i / 2);
+                    const min = i % 2 === 0 ? '00' : '30';
+                    const hour12 = ((hour24 + 11) % 12) + 1;
+                    const ampm = hour24 < 12 ? 'AM' : 'PM';
+                    const display = `${hour12.toString().padStart(2, '0')}:${min} ${ampm}`;
+                    const value = `${hour24.toString().padStart(2, '0')}:${min}`;
+                    return (
+                      <SelectItem key={value} value={value} className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                        {display}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
             <Button
               type="submit"
               className="text-black font-semibold bg-gradient-to-r from-green-400 to-green-200 hover:from-green-500 hover:to-green-300 transition-all duration-200"
@@ -473,29 +506,55 @@ export default function FitnessPage() {
                               onChange={e => setEditDate(e.target.value)}
                               className="bg-[#232325] !text-white"
                             />
-                            <Select
-                              value={editTime}
-                              onValueChange={value => setEditTime(value)}
-                            >
-                              <SelectTrigger id="edit-activity-time" className="bg-[#232325] border-gray-700 !text-white w-full rounded px-3 py-2">
-                                <SelectValue placeholder="Select a time (optional)" className="!text-white !placeholder:text-gray-400" />
-                              </SelectTrigger>
-                              <SelectContent className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
-                                {Array.from({ length: 24 * 2 }, (_, i) => {
-                                  const hour24 = Math.floor(i / 2);
-                                  const min = i % 2 === 0 ? '00' : '30';
-                                  const hour12 = ((hour24 + 11) % 12) + 1;
-                                  const ampm = hour24 < 12 ? 'AM' : 'PM';
-                                  const display = `${hour12.toString().padStart(2, '0')}:${min} ${ampm}`;
-                                  const value = `${hour24.toString().padStart(2, '0')}:${min}`;
-                                  return (
-                                    <SelectItem key={value} value={value} className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
-                                      {display}
-                                    </SelectItem>
-                                  );
-                                })}
-                              </SelectContent>
-                            </Select>
+                            <div className="flex gap-2">
+                              <Select
+                                value={editTime}
+                                onValueChange={value => setEditTime(value)}
+                              >
+                                <SelectTrigger id="edit-activity-time" className="bg-[#232325] border-gray-700 !text-white w-full rounded px-3 py-2">
+                                  <SelectValue placeholder="Start time (optional)" className="!text-white !placeholder:text-gray-400" />
+                                </SelectTrigger>
+                                <SelectContent className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                                  {Array.from({ length: 24 * 2 }, (_, i) => {
+                                    const hour24 = Math.floor(i / 2);
+                                    const min = i % 2 === 0 ? '00' : '30';
+                                    const hour12 = ((hour24 + 11) % 12) + 1;
+                                    const ampm = hour24 < 12 ? 'AM' : 'PM';
+                                    const display = `${hour12.toString().padStart(2, '0')}:${min} ${ampm}`;
+                                    const value = `${hour24.toString().padStart(2, '0')}:${min}`;
+                                    return (
+                                      <SelectItem key={value} value={value} className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                                        {display}
+                                      </SelectItem>
+                                    );
+                                  })}
+                                </SelectContent>
+                              </Select>
+                              
+                              <Select
+                                value={editEndTime}
+                                onValueChange={value => setEditEndTime(value)}
+                              >
+                                <SelectTrigger id="edit-activity-end-time" className="bg-[#232325] border-gray-700 !text-white w-full rounded px-3 py-2">
+                                  <SelectValue placeholder="End time (optional)" className="!text-white !placeholder:text-gray-400" />
+                                </SelectTrigger>
+                                <SelectContent className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                                  {Array.from({ length: 24 * 2 }, (_, i) => {
+                                    const hour24 = Math.floor(i / 2);
+                                    const min = i % 2 === 0 ? '00' : '30';
+                                    const hour12 = ((hour24 + 11) % 12) + 1;
+                                    const ampm = hour24 < 12 ? 'AM' : 'PM';
+                                    const display = `${hour12.toString().padStart(2, '0')}:${min} ${ampm}`;
+                                    const value = `${hour24.toString().padStart(2, '0')}:${min}`;
+                                    return (
+                                      <SelectItem key={value} value={value} className="dark:bg-[#18181b] dark:text-white bg-[#18181b] text-white">
+                                        {display}
+                                      </SelectItem>
+                                    );
+                                  })}
+                                </SelectContent>
+                              </Select>
+                            </div>
                           </div>
                         </div>
                         <div className="flex gap-2 ml-2">
@@ -555,7 +614,10 @@ export default function FitnessPage() {
                               <Calendar className="h-4 w-4 mr-1" />
                               {activity.activity_date}
                               {activity.activity_time && (
-                                <span className="ml-2">at {activity.activity_time}</span>
+                                <span className="ml-2">
+                                  at {activity.activity_time}
+                                  {activity.activity_end_time && ` - ${activity.activity_end_time}`}
+                                </span>
                               )}
                             </span>
                             <Button
