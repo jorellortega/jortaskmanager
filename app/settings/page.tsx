@@ -6,11 +6,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { ArrowLeft, Bell, Moon, User } from "lucide-react"
+import { ArrowLeft, Bell, Moon, User, CreditCard, DollarSign, Settings as SettingsIcon, Sparkles } from "lucide-react"
 import Link from "next/link"
 import { supabase } from '@/lib/supabaseClient'
+import { useAuth } from '@/hooks/use-auth'
 
 export default function Settings() {
+  const { isAdmin } = useAuth()
   const [darkMode, setDarkMode] = useState(false)
   const [notifications, setNotifications] = useState(true)
   const [username, setUsername] = useState("")
@@ -143,6 +145,62 @@ export default function Settings() {
           </Link>
         </CardContent>
       </Card>
+
+      {/* Billing & Subscription Management */}
+      <Card className="bg-[#141415] border border-gray-700 mb-4">
+        <CardHeader>
+          <CardTitle className="flex items-center text-green-400">
+            <DollarSign className="mr-2 text-green-400" />
+            <span className="text-green-400">Billing & Subscription</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-gray-400 text-sm mb-4">Manage your subscription and billing information</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Link href="/billing">
+              <Button className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg">
+                <CreditCard className="mr-2 h-4 w-4" />
+                Billing Dashboard
+              </Button>
+            </Link>
+            <Link href="/credits">
+              <Button variant="outline" className="w-full border-green-500 text-green-400 hover:bg-green-900/20 font-semibold px-6 py-3 rounded-lg">
+                <DollarSign className="mr-2 h-4 w-4" />
+                Manage Credits
+              </Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Admin AI Settings - Only visible to admins */}
+      {isAdmin && (
+        <Card className="bg-[#141415] border border-gray-700 mb-4">
+          <CardHeader>
+            <CardTitle className="flex items-center text-blue-400">
+              <Sparkles className="mr-2 text-blue-400" />
+              <span className="text-blue-400">AI Administration</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-gray-400 text-sm mb-4">Configure AI provider settings and system prompts</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Link href="/ai-settings">
+                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg">
+                  <SettingsIcon className="mr-2 h-4 w-4" />
+                  AI Settings
+                </Button>
+              </Link>
+              <Link href="/ai-info">
+                <Button variant="outline" className="w-full border-blue-500 text-blue-400 hover:bg-blue-900/20 font-semibold px-6 py-3 rounded-lg">
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  AI System Prompt
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Time Sync Button */}
       <div className="flex justify-center mt-8">

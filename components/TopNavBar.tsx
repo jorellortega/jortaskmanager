@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { CalendarDays, Clock, DollarSign, Briefcase, Sun, Utensils, Dumbbell, Cake, Repeat, CheckSquare, Target, Users, Lightbulb, Plane, Clock as ClockIcon, StickyNote, BookOpen, LayoutDashboard, Monitor, Award, Trophy, Heart, Baby, Settings } from 'lucide-react';
+import { useAuth } from '@/hooks/use-auth';
+import { CalendarDays, Clock, DollarSign, Briefcase, Sun, Utensils, Dumbbell, Cake, Repeat, CheckSquare, Target, Users, Lightbulb, Plane, Clock as ClockIcon, StickyNote, BookOpen, LayoutDashboard, Monitor, Award, Trophy, Heart, Baby, Settings, CreditCard, Zap, ListChecks } from 'lucide-react';
 
 interface NavItem {
   href: string;
@@ -21,6 +22,7 @@ const allNavItems: NavItem[] = [
   { href: '/calendar', icon: <CalendarDays />, color: 'text-blue-400', glow: '#3b82f6', label: 'Calendar', category: 'Core', isDefault: true },
   { href: '/appointments', icon: <Clock />, color: 'text-blue-400', glow: '#3b82f6', label: 'Appointments', category: 'Core', isDefault: true },
   { href: '/todo', icon: <CheckSquare />, color: 'text-indigo-400', glow: '#818cf8', label: 'Todo', category: 'Core', isDefault: true },
+  { href: '/checklist', icon: <ListChecks />, color: 'text-blue-400', glow: '#3b82f6', label: 'Checklist', category: 'Core', isDefault: false },
   { href: '/goals', icon: <Target />, color: 'text-red-400', glow: '#f87171', label: 'Goals', category: 'Core', isDefault: true },
   
   // Productivity
@@ -50,6 +52,8 @@ const allNavItems: NavItem[] = [
   
   // Finance
   { href: '/expenses', icon: <DollarSign />, color: 'text-green-400', glow: '#22c55e', label: 'Expenses', category: 'Finance', isDefault: true },
+  { href: '/billing', icon: <CreditCard />, color: 'text-blue-400', glow: '#3b82f6', label: 'Billing', category: 'Finance', isDefault: true },
+  { href: '/credits', icon: <Zap />, color: 'text-yellow-400', glow: '#fde047', label: 'Credits', category: 'Finance', isDefault: true },
   
   // Development
   { href: '/selfdevelopment', icon: <Trophy />, color: 'text-yellow-400', glow: '#fde047', label: 'Self Development', category: 'Development', isDefault: false },
@@ -62,6 +66,7 @@ const allNavItems: NavItem[] = [
 const instanceId = Math.random().toString(36).substr(2, 9);
 
 export default function TopNavBar() {
+  const { isAdmin } = useAuth();
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
   const [customNavItems, setCustomNavItems] = useState<string[]>([]);
@@ -116,8 +121,14 @@ export default function TopNavBar() {
   console.log('Custom nav items:', customNavItems);
   console.log('All nav items:', allNavItems.length);
 
-  // Filter navigation items based on custom selection
-  let visibleNavItems = allNavItems.filter(item => customNavItems.includes(item.href));
+  // Filter navigation items based on custom selection and admin status
+  let visibleNavItems = allNavItems.filter(item => {
+    // Hide brainstorming for non-admins
+    if (item.href === '/brainstorming' && !isAdmin) {
+      return false;
+    }
+    return customNavItems.includes(item.href);
+  });
   
   // Always ensure settings icon is included
   const settingsItem = allNavItems.find(item => item.href === '/nav-customization');
@@ -125,10 +136,15 @@ export default function TopNavBar() {
     visibleNavItems.push(settingsItem);
   }
   
-  // If no items are visible, fallback to default items
+  // If no items are visible, fallback to default items (excluding brainstorming for non-admins)
   if (visibleNavItems.length === 0) {
     console.log('No visible items, falling back to defaults');
-    visibleNavItems = allNavItems.filter(item => item.isDefault);
+    visibleNavItems = allNavItems.filter(item => {
+      if (item.href === '/brainstorming' && !isAdmin) {
+        return false;
+      }
+      return item.isDefault;
+    });
   }
   
   console.log('Visible nav items:', visibleNavItems.length);

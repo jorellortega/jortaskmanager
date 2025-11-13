@@ -1,0 +1,134 @@
+{
+  "next": {
+    "version": "15.2.4",
+    "usesAppRouter": true,
+    "experimentalFlags": ["webpackBuildWorker", "parallelServerBuildTraces", "parallelServerCompiles"],
+    "outputModeInNextConfig": "none",
+    "usesMiddleware": false,
+    "usesEdgeRuntime": false,
+    "usesServerActions": false,
+    "hasRouteHandlers": true,
+    "listDynamicRoutes": []
+  },
+  "ssr_map": [
+    {
+      "route": "app/layout.tsx",
+      "reason": "Server component with metadata export (SEO/metadata)"
+    }
+  ],
+  "static_export_feasibility": {
+    "canExport": false,
+    "blockers": [
+      {
+        "file": "app/api/stripe/webhook/route.ts:16",
+        "reason": "POST route handler requires server runtime for webhook signature verification"
+      },
+      {
+        "file": "app/api/stripe/create-checkout-session/route.ts:14",
+        "reason": "Server-side Stripe API calls require Node.js runtime"
+      },
+      {
+        "file": "app/api/stripe/create-portal-session/route.ts:14",
+        "reason": "Server-side Stripe portal creation requires Node.js runtime"
+      },
+      {
+        "file": "app/api/credits/purchase/route.ts:14",
+        "reason": "Server-side API route for credit purchases"
+      },
+      {
+        "file": "app/api/credits/use/route.ts:14",
+        "reason": "Server-side API route for credit usage tracking"
+      },
+      {
+        "file": "app/api/manual-update-subscription/route.ts:14",
+        "reason": "Server-side API route requiring Supabase service role key"
+      },
+      {
+        "file": "lib/supabaseClient.ts:1-13",
+        "reason": "Supabase real-time subscriptions require WebSocket connections (not available in static export)"
+      },
+      {
+        "file": "app/api/stripe/create-checkout-session/route.ts:50-51",
+        "reason": "Hardcoded localhost URLs in success_url/cancel_url need environment-based configuration"
+      }
+    ],
+    "fixes": [
+      "Move all API routes to separate backend service (Express/Node.js) or Supabase Edge Functions",
+      "Replace hardcoded localhost URLs with environment variable NEXT_PUBLIC_APP_URL",
+      "Use Supabase Edge Functions for webhook handling instead of Next.js API routes",
+      "Consider using Stripe's hosted checkout exclusively (no custom redirect URLs needed)"
+    ]
+  },
+  "supabase": {
+    "packagesUsed": ["@supabase/supabase-js"],
+    "authFlow": "email/password",
+    "redirectUrlsFound": [],
+    "requiresServerEnvVars": [
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "clientEnvVars": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "NEXT_PUBLIC_SUPABASE_ANON_KEY"
+    ]
+  },
+  "stripe": {
+    "usesCheckoutOrPortal": true,
+    "usesStripeElementsInApp": false,
+    "webhooksPresent": true,
+    "serverRoutesForStripe": [
+      "app/api/stripe/create-checkout-session/route.ts",
+      "app/api/stripe/create-portal-session/route.ts",
+      "app/api/stripe/webhook/route.ts"
+    ]
+  },
+  "pwa_sw": {
+    "hasServiceWorker": false,
+    "notificationsUsed": false,
+    "fileDownloadsUsed": false
+  },
+  "security": {
+    "CSPHeadersPresent": false,
+    "CORSOrigins": [],
+    "thirdPartyDomains": [
+      "supabase.co",
+      "stripe.com",
+      "stripe-api.com"
+    ]
+  },
+  "urls": {
+    "prodUrl": "https://jortaskmanager.vercel.app",
+    "vercelPreviewPattern": "*.vercel.app",
+    "customDomains": []
+  },
+  "desktop_needs": [
+    {
+      "feature": "file_picker",
+      "location": "app/settings/page.tsx:121-126",
+      "reason": "Settings page has notification toggle UI but could benefit from native file picker for data export/import"
+    },
+    {
+      "feature": "notifications",
+      "location": "app/settings/page.tsx:121-126",
+      "reason": "Notification toggle exists but uses web notifications - native macOS notifications would be better"
+    },
+    {
+      "feature": "menubar_tray",
+      "location": "components/TopNavBar.tsx:66-163",
+      "reason": "Top navigation bar could be enhanced with native macOS menu bar integration"
+    },
+    {
+      "feature": "file_system",
+      "location": "app/dashboard/page.tsx:1-2618",
+      "reason": "Large dashboard with data export/import capabilities would benefit from native file system access"
+    },
+    {
+      "feature": "keyboard_shortcuts",
+      "location": "app/dashboard/page.tsx:1-2618",
+      "reason": "Productivity app would benefit from macOS keyboard shortcuts (Cmd+N for new task, Cmd+S for save, etc.)"
+    }
+  ],
+  "recommendation": "Tauri",
+  "recommendation_rationale": "This app has 6 server-side API routes that require Node.js runtime (Stripe webhooks, checkout sessions, credit management) which cannot be statically exported. Tauri allows keeping the React/Next.js frontend while providing a native shell, and the API routes can be moved to a separate backend service or Supabase Edge Functions. The app is primarily client-side rendered (all pages use 'use client'), making it a good fit for Tauri's lightweight architecture. Tauri also provides better security and smaller bundle size compared to Electron, while still supporting native macOS features like notifications, file system access, and menu bar integration that this productivity app would benefit from."
+}
+
+

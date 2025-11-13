@@ -1,6 +1,11 @@
+"use client"
+
 import Link from "next/link"
-import { Settings, UserIcon, CalendarDays, Clock, Target, StickyNote, Utensils, Dumbbell, DollarSign, Repeat, Users, ArrowRight, Heart } from "lucide-react"
+import { Settings, UserIcon, CalendarDays, Clock, Target, StickyNote, Utensils, Dumbbell, DollarSign, Repeat, Users, ArrowRight, Heart, Sparkles } from "lucide-react"
 import Script from "next/script"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { AIChat } from "@/components/AIChat"
 
 export default function Home() {
   const isLoggedIn = false // This should be replaced with actual authentication logic
@@ -84,6 +89,19 @@ export default function Home() {
           </nav>
         </header>
         <div className="flex-grow flex flex-col items-center justify-center">
+          {/* AI Chat Section */}
+          <section className="w-full max-w-4xl mb-10" aria-labelledby="ai-chat-heading">
+            <div className="mb-4">
+              <h2 id="ai-chat-heading" className="text-2xl font-bold text-center mb-2 bg-gradient-to-r from-blue-400 via-green-400 to-purple-400 text-transparent bg-clip-text">
+                AI Assistant
+              </h2>
+              <p className="text-gray-400 text-center text-sm">
+                Get instant help with task management, productivity tips, and more
+              </p>
+            </div>
+            <AIChat />
+          </section>
+
           {/* Feature Advertisement Section */}
           <section className="w-full max-w-4xl mb-10" aria-labelledby="features-heading">
             <h2 id="features-heading" className="text-xl font-semibold mb-6 text-center bg-gradient-to-r from-blue-400 via-green-400 to-pink-400 text-transparent bg-clip-text">Features</h2>
@@ -153,26 +171,49 @@ export default function Home() {
 
           {/* Call to Action Section */}
           <section className="w-full max-w-4xl mb-10" aria-labelledby="cta-heading">
-            <div className="bg-gradient-to-r from-white via-green-200 to-green-500 rounded-xl p-8">
+            <div className="bg-[#141414] border border-gray-700 rounded-xl p-8">
               <div className="text-center">
-                <h3 id="cta-heading" className="text-3xl font-bold mb-4 text-neutral-900">
+                <h3 id="cta-heading" className="text-3xl font-bold mb-4 text-white">
                   Ready to Transform Your Productivity?
                 </h3>
-                <p className="text-lg text-gray-800 mb-6 max-w-2xl mx-auto">
-                  Start organizing your life with Task Manager by JOR. Begin your journey to better productivity today – free for the first 100 users!
+                <p className="text-lg text-gray-200 mb-6 max-w-2xl mx-auto">
+                  Start organizing your life with Task Manager by JOR. Begin your journey to better productivity today!
                 </p>
                 <Link 
                   href="/auth" 
-                  className="inline-flex items-center px-8 py-4 bg-white text-gray-900 font-semibold rounded-lg hover:bg-gray-100 transition-all duration-200 border border-gray-200"
+                  className="inline-flex items-center px-8 py-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-all duration-200"
                 >
                   Get Started Now
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
-                <p className="text-sm text-gray-700 mt-4">
-                  No credit card required • Free for the first 100 users • Start in seconds
-                </p>
               </div>
             </div>
+          </section>
+
+          {/* Plans Card Section */}
+          <section className="w-full max-w-4xl mb-10" aria-labelledby="plans-heading">
+            <Card className="bg-[#141414] border border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-2xl font-bold text-center text-white flex items-center justify-center gap-2">
+                  <Sparkles className="h-6 w-6 text-yellow-400" />
+                  Upgrade Your Experience
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-center space-y-4">
+                <p className="text-gray-200 text-lg">
+                  Unlock premium features and get more out of your productivity journey
+                </p>
+                <p className="text-gray-300 text-sm">
+                  Choose from our flexible plans designed to fit your needs
+                </p>
+                <Link href="/billing/plans">
+                  <Button className="mt-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold px-8 py-6 text-lg">
+                    View Plans & Pricing
+                    <ArrowRight className="ml-2 h-5 w-5" />
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
           </section>
         </div>
         

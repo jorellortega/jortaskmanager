@@ -9,10 +9,11 @@ import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Settings, Save, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/use-auth';
 import { 
   CalendarDays, Clock, DollarSign, Briefcase, Sun, Utensils, Dumbbell, Cake, 
   Repeat, CheckSquare, Target, Users, Lightbulb, Plane, Clock as ClockIcon, 
-  StickyNote, BookOpen, LayoutDashboard, Monitor, Trophy, Heart, Baby 
+  StickyNote, BookOpen, LayoutDashboard, Monitor, Trophy, Heart, Baby, ListChecks 
 } from 'lucide-react';
 
 interface NavItem {
@@ -31,6 +32,7 @@ const allNavItems: NavItem[] = [
   { href: '/calendar', icon: <CalendarDays />, color: 'text-blue-400', glow: '#3b82f6', label: 'Calendar', category: 'Core', isDefault: true },
   { href: '/appointments', icon: <Clock />, color: 'text-blue-400', glow: '#3b82f6', label: 'Appointments', category: 'Core', isDefault: true },
   { href: '/todo', icon: <CheckSquare />, color: 'text-indigo-400', glow: '#818cf8', label: 'Todo', category: 'Core', isDefault: true },
+  { href: '/checklist', icon: <ListChecks />, color: 'text-blue-400', glow: '#3b82f6', label: 'Checklist', category: 'Core', isDefault: false },
   { href: '/goals', icon: <Target />, color: 'text-red-400', glow: '#f87171', label: 'Goals', category: 'Core', isDefault: true },
   
   // Productivity
@@ -66,6 +68,7 @@ const allNavItems: NavItem[] = [
 ];
 
 export default function NavCustomizationPage() {
+  const { isAdmin } = useAuth();
   const [user, setUser] = useState<any>(null);
   const [customNavItems, setCustomNavItems] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -173,7 +176,15 @@ export default function NavCustomizationPage() {
   const getItemsByCategory = () => {
     const categories: { [key: string]: NavItem[] } = {};
     
-    allNavItems.forEach(item => {
+    // Filter out brainstorming for non-admins
+    const filteredItems = allNavItems.filter(item => {
+      if (item.href === '/brainstorming' && !isAdmin) {
+        return false;
+      }
+      return true;
+    });
+    
+    filteredItems.forEach(item => {
       if (!categories[item.category]) {
         categories[item.category] = [];
       }
@@ -262,7 +273,15 @@ export default function NavCustomizationPage() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {items.map((item) => (
+                  {items
+                    .filter(item => {
+                      // Hide brainstorming for non-admins
+                      if (item.href === '/brainstorming' && !isAdmin) {
+                        return false;
+                      }
+                      return true;
+                    })
+                    .map((item) => (
                     <div
                       key={item.href}
                       className={`flex items-center justify-between p-4 rounded-lg border transition-all ${
@@ -310,7 +329,13 @@ export default function NavCustomizationPage() {
               <div className="flex flex-nowrap items-center gap-4 overflow-x-auto">
                 <div className="flex items-center gap-4 min-w-max">
                   {allNavItems
-                    .filter(item => isItemEnabled(item.href))
+                    .filter(item => {
+                      // Hide brainstorming for non-admins
+                      if (item.href === '/brainstorming' && !isAdmin) {
+                        return false;
+                      }
+                      return isItemEnabled(item.href);
+                    })
                     .map(({ href, icon, color, glow }) => (
                       <div
                         key={href}

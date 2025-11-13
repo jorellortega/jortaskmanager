@@ -1,18 +1,20 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft, Trash2, Info } from "lucide-react"
+import { ArrowLeft, Trash2, Info, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts"
 import { ChartCard } from "@/components/ui/chart-card"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useAuth } from "@/hooks/use-auth"
 
 type BubbleNode = {
   id: number
@@ -207,6 +209,8 @@ const mockSwotItems: SwotItem[] = [
 ]
 
 export default function BrainstormingPage() {
+  const router = useRouter()
+  const { user, loading: authLoading, isAdmin } = useAuth()
   const [bubbles, setBubbles] = useState<BubbleNode[]>(mockBubbles)
   const [newBubble, setNewBubble] = useState("")
   const [chartData, setChartData] = useState<ChartData[]>(mockChartData)
@@ -219,6 +223,31 @@ export default function BrainstormingPage() {
   const [newSixHatsThought, setNewSixHatsThought] = useState({ hat: "", thought: "" })
   const [swotItems, setSwotItems] = useState<SwotItem[]>(mockSwotItems)
   const [newSwotItem, setNewSwotItem] = useState<{ category: "strengths" | "weaknesses" | "opportunities" | "threats"; text: string }>({ category: "strengths", text: "" })
+
+  useEffect(() => {
+    if (!authLoading) {
+      if (!user) {
+        router.push('/auth')
+        return
+      }
+      if (!isAdmin) {
+        router.push('/dashboard')
+        return
+      }
+    }
+  }, [user, authLoading, isAdmin, router])
+
+  if (authLoading) {
+    return (
+      <div className="container mx-auto p-4 bg-[#0E0E0F] min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+      </div>
+    )
+  }
+
+  if (!isAdmin) {
+    return null
+  }
 
   const addBubble = (e: React.FormEvent) => {
     e.preventDefault()

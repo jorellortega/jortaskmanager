@@ -42,19 +42,39 @@ export default function AuthPage() {
       }
     } else {
       // Signup with Supabase Auth
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { name, phone }
+      console.log('🚀 Starting signup process...')
+      console.log('📧 Email:', email)
+      console.log('👤 Name:', name)
+      console.log('📱 Phone:', phone)
+      
+      try {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { name, phone }
+          }
+        })
+        
+        console.log('📊 Signup response data:', data)
+        console.log('❌ Signup error:', error)
+        
+        if (error) {
+          console.error('🚨 Signup failed:', error.message)
+          alert(`Signup failed: ${error.message}`)
+          return
         }
-      })
-      if (error) {
-        alert(error.message)
-        return
+        
+        console.log('✅ Signup successful!')
+        console.log('👤 User data:', data.user)
+        console.log('📧 Session:', data.session)
+        
+        // No need to insert into public.users table here!
+        router.push('/dashboard');
+      } catch (err) {
+        console.error('🚨 Signup exception:', err)
+        alert(`Signup failed: ${err}`)
       }
-      // No need to insert into public.users table here!
-      router.push('/dashboard');
     }
   }
 
