@@ -36,6 +36,9 @@ import {
   Edit2,
   Trash2,
   Plus,
+  Calendar,
+  Check,
+  X,
 } from "lucide-react"
 import { format, addDays, startOfWeek, parseISO, differenceInDays, subDays } from "date-fns"
 import Link from "next/link"
@@ -139,6 +142,8 @@ export default function WeeklyTaskManager() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; type: 'task' | 'subtask' | 'work' | 'work-subtask' | 'selfdev' | 'selfdev-subtask' | 'leisure' | 'fitness' | 'fitness-subtask'; name: string } | null>(null)
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null)
+  const [todoMoveTargetId, setTodoMoveTargetId] = useState<string | null>(null)
+  const [todoMoveDateDraft, setTodoMoveDateDraft] = useState<string>("")
   const [activeSubtaskId, setActiveSubtaskId] = useState<string | null>(null)
   const [activeWorkId, setActiveWorkId] = useState<string | null>(null)
   const [activeWorkSubtaskId, setActiveWorkSubtaskId] = useState<string | null>(null)
@@ -709,6 +714,31 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
       setTodos((prev) => prev.map((todo) => (todo.id === id ? data[0] : todo)));
       setEditingTaskId(null);
       setEditingTaskText("");
+    }
+    setLoading(false);
+  };
+
+  const moveTodoToDate = async (id: string, newDate: string) => {
+    if (!newDate?.trim()) return;
+    const todo = todos.find((t) => t.id === id);
+    let dueDateValue = newDate.trim();
+    if (todo?.due_date?.includes("T")) {
+      const timePart = todo.due_date.split("T")[1];
+      if (timePart) dueDateValue = `${newDate.trim()}T${timePart}`;
+    }
+    setLoading(true);
+    setError(null);
+    const { data, error: updateError } = await supabase
+      .from("todos")
+      .update({ due_date: dueDateValue })
+      .eq("id", id)
+      .select();
+    if (updateError) {
+      setError(updateError.message || "Failed to move task.");
+    } else if (data && data.length > 0) {
+      setTodos((prev) => prev.map((t) => (t.id === id ? data[0] : t)));
+      setTodoMoveTargetId(null);
+      setActiveTaskId(null);
     }
     setLoading(false);
   };
@@ -1448,7 +1478,15 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                   <div key={task.id} className="space-y-1">
                     <div 
                       className="flex items-center space-x-2 p-2 rounded-lg hover:bg-[#1a1a1b] transition-colors cursor-pointer"
-                      onClick={() => setActiveTaskId(activeTaskId === task.id ? null : task.id)}
+                      onClick={() => {
+                        if (activeTaskId === task.id) {
+                          setActiveTaskId(null);
+                          setTodoMoveTargetId(null);
+                        } else {
+                          setActiveTaskId(task.id);
+                          setTodoMoveTargetId(null);
+                        }
+                      }}
                     >
                                               <Checkbox
                           id={`task-${task.id}`}
@@ -1506,27 +1544,77 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                       
                       {/* Action buttons - only show when active */}
                       {activeTaskId === task.id && (
-                        <div className="flex items-center space-x-1 animate-in slide-in-from-right-2 duration-200">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              startEditingTask(task.id, task.task);
-                            }}
-                            className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
-                            title="Edit task"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              confirmDeleteTodo(task.id, task.task);
-                            }}
-                            className="p-1 text-red-400 hover:text-red-300 transition-colors"
-                            title="Delete task"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                        <div className="flex flex-wrap items-center gap-1 justify-end animate-in slide-in-from-right-2 duration-200">
+                          {todoMoveTargetId === task.id ? (
+                            <>
+                              <input
+                                type="date"
+                                value={todoMoveDateDraft}
+                                onChange={(e) => setTodoMoveDateDraft(e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="rounded border border-gray-600 bg-[#18181A] px-1 py-0.5 text-xs text-white"
+                              />
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  moveTodoToDate(task.id, todoMoveDateDraft);
+                                }}
+                                disabled={loading || !todoMoveDateDraft}
+                                className="p-1 text-green-400 hover:text-green-300 transition-colors disabled:opacity-40"
+                                title="Move to this date"
+                              >
+                                <Check className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setTodoMoveTargetId(null);
+                                }}
+                                className="p-1 text-gray-400 hover:text-gray-300 transition-colors"
+                                title="Cancel"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startEditingTask(task.id, task.task);
+                                }}
+                                className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
+                                title="Edit task"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const d =
+                                    (task.due_date && task.due_date.slice(0, 10)) || focusedDate;
+                                  setTodoMoveDateDraft(d);
+                                  setTodoMoveTargetId(task.id);
+                                }}
+                                className="p-1 text-emerald-400 hover:text-emerald-300 transition-colors"
+                                title="Move to another date"
+                              >
+                                <Calendar className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  confirmDeleteTodo(task.id, task.task);
+                                }}
+                                className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                                title="Delete task"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       )}
                     </div>

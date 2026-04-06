@@ -111,8 +111,8 @@ export default function TopNavBar() {
     }
   };
 
-  // Don't render on home page, but only after mounting to avoid hydration mismatch
-  if (!mounted || pathname === '/' || loading) {
+  // Don't render on home or auth pages, but only after mounting to avoid hydration mismatch
+  if (!mounted || pathname === '/' || pathname?.startsWith('/auth') || loading) {
     console.log(`TopNavBar instance ${instanceId} not rendering - mounted: ${mounted}, pathname: ${pathname}, loading: ${loading}`);
     return null;
   }
