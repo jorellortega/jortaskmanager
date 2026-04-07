@@ -12,6 +12,12 @@ import Link from "next/link"
 import { supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 
+function readFormField(form: HTMLFormElement, name: string, fallback: string) {
+  const el = form.elements.namedItem(name) as HTMLInputElement | null
+  const raw = el?.value ?? fallback
+  return typeof raw === "string" ? raw : fallback
+}
+
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true)
   const [email, setEmail] = useState("")
@@ -20,6 +26,7 @@ export default function AuthPage() {
   const [phone, setPhone] = useState("")
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
+  const [authBusy, setAuthBusy] = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -27,53 +34,75 @@ export default function AuthPage() {
     });
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    const form = e.currentTarget
+
+    // Browser/password-manager autofill often does not fire React onChange, so controlled
+    // state can stay empty on the first submit. Always read the live DOM values too.
+    const emailValue = readFormField(form, "auth-email", email).trim()
+    const passwordValue = readFormField(form, "auth-password", password)
+    const nameValue = readFormField(form, "auth-name", name).trim()
+    const phoneValue = readFormField(form, "auth-phone", phone).trim()
+
     if (isLogin) {
-      // Login with Supabase Auth
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-      if (error) {
-        alert(error.message)
-      } else {
-        router.push('/dashboard');
+      if (!emailValue || !passwordValue) {
+        alert("Please enter your email and password.")
+        return
+      }
+      setAuthBusy(true)
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: emailValue,
+          password: passwordValue,
+        })
+        if (error) {
+          alert(error.message)
+          return
+        }
+        if (!data.session) {
+          alert(
+            "Could not start a session. If email confirmation is required, check your inbox first.",
+          )
+          return
+        }
+        router.push("/dashboard")
+        router.refresh()
+      } finally {
+        setAuthBusy(false)
       }
     } else {
-      // Signup with Supabase Auth
-      console.log('🚀 Starting signup process...')
-      console.log('📧 Email:', email)
-      console.log('👤 Name:', name)
-      console.log('📱 Phone:', phone)
-      
+      if (!emailValue || !passwordValue || !nameValue || !phoneValue) {
+        alert("Please fill in all fields.")
+        return
+      }
+      setAuthBusy(true)
       try {
         const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
+          email: emailValue,
+          password: passwordValue,
           options: {
-            data: { name, phone }
-          }
+            data: { name: nameValue, phone: phoneValue },
+          },
         })
-        
-        console.log('📊 Signup response data:', data)
-        console.log('❌ Signup error:', error)
-        
+
         if (error) {
-          console.error('🚨 Signup failed:', error.message)
           alert(`Signup failed: ${error.message}`)
           return
         }
-        
-        console.log('✅ Signup successful!')
-        console.log('👤 User data:', data.user)
-        console.log('📧 Session:', data.session)
-        
-        // No need to insert into public.users table here!
-        router.push('/dashboard');
+
+        if (data.session) {
+          router.push("/dashboard")
+          router.refresh()
+        } else {
+          alert(
+            "Account created. If your project requires email confirmation, check your inbox, then sign in.",
+          )
+        }
       } catch (err) {
-        console.error('🚨 Signup exception:', err)
-        alert(`Signup failed: ${err}`)
+        alert(`Signup failed: ${err instanceof Error ? err.message : String(err)}`)
+      } finally {
+        setAuthBusy(false)
       }
     }
   }
@@ -107,17 +136,19 @@ export default function AuthPage() {
           <CardDescription>{isLogin ? "Welcome back!" : "Create your account"}</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} autoComplete="on">
             <div className="space-y-4">
               {!isLogin && (
                 <div className="space-y-2">
                   <Label htmlFor="name">Name</Label>
                   <Input
                     id="name"
+                    name="auth-name"
                     type="text"
                     placeholder="Enter your name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
+                    autoComplete="name"
                     required
                     className="bg-[#1A1A1B] border-gray-700 text-white"
                   />
@@ -127,10 +158,12 @@ export default function AuthPage() {
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
+                  name="auth-email"
                   type="email"
                   placeholder="Enter your email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
                   required
                   className="bg-[#1A1A1B] border-gray-700 text-white"
                 />
@@ -140,10 +173,12 @@ export default function AuthPage() {
                   <Label htmlFor="phone">Phone Number</Label>
                   <Input
                     id="phone"
+                    name="auth-phone"
                     type="tel"
                     placeholder="Enter your phone number"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
+                    autoComplete="tel"
                     required
                     className="bg-[#1A1A1B] border-gray-700 text-white"
                   />
@@ -153,17 +188,19 @@ export default function AuthPage() {
                 <Label htmlFor="password">Password</Label>
                 <Input
                   id="password"
+                  name="auth-password"
                   type="password"
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  autoComplete={isLogin ? "current-password" : "new-password"}
                   required
                   className="bg-[#1A1A1B] border-gray-700 text-white"
                 />
               </div>
             </div>
-            <Button type="submit" className="w-full mt-6">
-              {isLogin ? "Login" : "Sign Up"}
+            <Button type="submit" className="w-full mt-6" disabled={authBusy}>
+              {authBusy ? "Please wait…" : isLogin ? "Login" : "Sign Up"}
             </Button>
           </form>
         </CardContent>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
@@ -170,6 +170,17 @@ export default function WeeklyTaskManager() {
   const [addingSubtaskTo, setAddingSubtaskTo] = useState<string | null>(null)
   const router = useRouter();
   const [focusedDate, setFocusedDate] = useState<string>("");
+  const [dashboardDebug, setDashboardDebug] = useState(false)
+  const addTaskInFlightRef = useRef(false)
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const sp = new URLSearchParams(window.location.search)
+    setDashboardDebug(
+      sp.get("dashboardDebug") === "1" ||
+        window.localStorage.getItem("dashboardDebug") === "1",
+    )
+  }, [])
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -329,68 +340,75 @@ export default function WeeklyTaskManager() {
       setSubtasks([""])
       return
     }
-    setLoading(true)
-    setError(null)
-    // Use focusedDate directly instead of calculating from currentDay
-    const dueDate = focusedDate
-    
-    // Insert main todo
-    const { data: mainData, error: insertError } = await supabase
-      .from("todos")
-      .insert([
-        {
-          user_id: userId,
-          task: newTaskText.trim(),
-          due_date: dueDate,
-          completed: false,
-          parent_id: null,
-        },
-      ])
-      .select()
-    
-    if (insertError) {
-      setError(insertError.message || "Failed to add task.")
-      setLoading(false)
+    if (addTaskInFlightRef.current) {
       return
     }
-    
-    let newMainTodo = mainData && mainData[0]
-    let newTodos = newMainTodo ? [newMainTodo] : []
-    
-    // Insert subtasks if any
-    if (newMainTodo && subtasks.some((s) => s.trim() !== "")) {
-      const subtaskInserts = subtasks
-        .filter((s) => s.trim() !== "")
-        .map((s) => ({
-          user_id: userId,
-          task: s.trim(),
-          due_date: null,
-          completed: false,
-          parent_id: newMainTodo.id,
-        }))
-      
-      if (subtaskInserts.length > 0) {
-        const { data: subData, error: subError } = await supabase
-          .from("todos")
-          .insert(subtaskInserts)
-          .select()
-        
-        if (subError) {
-          setError(subError.message || "Failed to add subtasks. Please try again.")
-        } else if (subData && subData.length > 0) {
-          newTodos = [...newTodos, ...subData]
+    addTaskInFlightRef.current = true
+    setLoading(true)
+    setError(null)
+    const dueDate = focusedDate
+
+    try {
+      const { data: mainData, error: insertError } = await supabase
+        .from("todos")
+        .insert([
+          {
+            user_id: userId,
+            task: newTaskText.trim(),
+            due_date: dueDate,
+            completed: false,
+            parent_id: null,
+          },
+        ])
+        .select()
+
+      if (insertError) {
+        setError(insertError.message || "Failed to add task.")
+        return
+      }
+
+      let newMainTodo = mainData && mainData[0]
+      let newTodos = newMainTodo ? [newMainTodo] : []
+
+      if (newMainTodo && subtasks.some((s) => s.trim() !== "")) {
+        const subtaskInserts = subtasks
+          .filter((s) => s.trim() !== "")
+          .map((s) => ({
+            user_id: userId,
+            task: s.trim(),
+            due_date: null,
+            completed: false,
+            parent_id: newMainTodo.id,
+          }))
+
+        if (subtaskInserts.length > 0) {
+          const { data: subData, error: subError } = await supabase
+            .from("todos")
+            .insert(subtaskInserts)
+            .select()
+
+          if (subError) {
+            setError(subError.message || "Failed to add subtasks. Please try again.")
+          } else if (subData && subData.length > 0) {
+            newTodos = [...newTodos, ...subData]
+          }
         }
       }
+
+      if (newTodos.length > 0) {
+        setTodos((prev) => [...prev, ...newTodos])
+      }
+
+      setAddingTask(false)
+      setNewTaskText("")
+      setSubtasks([""])
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Failed to add task."
+      setError(message)
+    } finally {
+      addTaskInFlightRef.current = false
+      setLoading(false)
     }
-    
-    if (newTodos.length > 0) {
-      setTodos((prev) => [...prev, ...newTodos])
-    }
-    
-    setAddingTask(false)
-    setNewTaskText("")
-    setSubtasks([""])
-    setLoading(false)
   }
 
   const handleAddTaskCancel = () => {
@@ -401,9 +419,11 @@ export default function WeeklyTaskManager() {
 
   const toggleTask = async (day: string, taskId: string) => {
     setError(null)
-    setLoading(true)
     const todo = todos.find((t) => t.id === taskId)
-    if (!todo) return
+    if (!todo) {
+      return
+    }
+    setLoading(true)
     const { data, error: updateError } = await supabase
       .from("todos")
       .update({ completed: !todo.completed })
@@ -1452,6 +1472,7 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
                         <Button 
                           onClick={handleAddTaskConfirm}
                           size="sm"
+                          disabled={loading}
                           className="bg-green-600 hover:bg-green-500"
                         >
                           Add Task
@@ -2634,6 +2655,20 @@ const handleToggleWorkPriority = async (id: string, completed: boolean) => {
           )}
         </div>
       </nav>
+      {dashboardDebug && (
+        <div className="fixed bottom-24 left-2 z-[100] max-w-[min(100vw-1rem,20rem)] rounded border border-amber-700/60 bg-black/95 p-2 font-mono text-[10px] leading-tight text-amber-100 shadow-xl">
+          <div className="mb-1 font-semibold text-amber-400">dashboard debug</div>
+          <div>?dashboardDebug=1 or localStorage dashboardDebug=&quot;1&quot;</div>
+          <div className="mt-1 border-t border-amber-900/50 pt-1">
+            <div>loading: {String(loading)}</div>
+            <div>addingTask: {String(addingTask)}</div>
+            <div>editingTaskId: {editingTaskId ?? "null"}</div>
+            <div>userId: {userId ? `${userId.slice(0, 8)}…` : "null"}</div>
+            <div>focusedDate: {focusedDate || "—"}</div>
+            <div>error: {error ? error.slice(0, 80) + (error.length > 80 ? "…" : "") : "none"}</div>
+          </div>
+        </div>
+      )}
       {error && <div className="bg-red-900 text-red-200 p-2 mb-4 rounded">{error}</div>}
       {loading && <div className="text-blue-300 mb-2">Loading...</div>}
       
